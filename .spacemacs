@@ -57,7 +57,7 @@ values."
      syntax-checking
      auto-completion
      spell-checking
-     (colors :variables colors-enable-nyan-cat-progress-bar t)
+     colors
      ;; Version control
      git
      version-control
