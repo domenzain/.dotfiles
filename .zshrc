@@ -49,6 +49,7 @@ alias vim='emacsclient -c'
 alias azer='setxkbmap -rules evdev -model evdev -layout us -variant altgr-intl'
 alias qwer='setxkbmap fr'
 alias dots='/usr/bin/env git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+alias lt='ls -lthr'
 
 # ===== History
 setopt append_history # Allow multiple terminal sessions to all append to one zsh command history
