@@ -352,6 +352,7 @@ you should place your code here."
    ;; Home-row escape
    evil-escape-key-sequence "jk"
    evil-escape-unordered-key-sequence t
+   evil-escape-delay 0.02
    magit-repository-directories '("~/repos/")
    )
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
