@@ -33,10 +33,10 @@ values."
    '(
      haskell
      yaml
-     ;; C/C++ related
+     ;; C/C++
      (c-c++ :variables c-c++-enable-clang-support t)
      cscope
-     ;; Python related
+     ;; Python
      (python :variables python-test-runner 'pytest)
      emacs-lisp
      markdown
@@ -53,6 +53,7 @@ values."
      ;;        shell-default-height 30
      ;;        shell-default-position 'bottom)
      ;; General
+     shell-scripts
      semantic
      syntax-checking
      auto-completion
