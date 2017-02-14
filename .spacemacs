@@ -360,6 +360,7 @@ you should place your code here."
   (global-git-commit-mode t)
   ;; Do not highlight current line by default.
   (global-hl-line-mode -1)
+  (golden-ratio-mode)
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
