@@ -33,10 +33,10 @@ values."
    '(
      haskell
      yaml
-     ;; C/C++ related
+     ;; C/C++
      (c-c++ :variables c-c++-enable-clang-support t)
      cscope
-     ;; Python related
+     ;; Python
      (python :variables python-test-runner 'pytest)
      emacs-lisp
      markdown
@@ -53,6 +53,7 @@ values."
      ;;        shell-default-height 30
      ;;        shell-default-position 'bottom)
      ;; General
+     shell-scripts
      semantic
      syntax-checking
      auto-completion
@@ -271,10 +272,20 @@ values."
    ;; scrolling overrides the default behavior of Emacs which recenters point
    ;; when it reaches the top or bottom of the screen. (default t)
    dotspacemacs-smooth-scrolling t
-   ;; If non-nil line numbers are turned on in all `prog-mode' and `text-mode'
-   ;; derivatives. If set to `relative', also turns on relative line numbers.
+   ;; Control line numbers activation.
+   ;; If set to `t' or `relative' line numbers are turned on in all `prog-mode' and
+   ;; `text-mode' derivatives. If set to `relative', line numbers are relative.
+   ;; This variable can also be set to a property list for finer control:
+   ;; '(:relative nil
+   ;;   :disabled-for-modes dired-mode
+   ;;                       doc-view-mode
+   ;;                       markdown-mode
+   ;;                       org-mode
+   ;;                       pdf-view-mode
+   ;;                       text-mode
+   ;;   :size-limit-kb 1000)
    ;; (default nil)
-   dotspacemacs-line-numbers 'relative
+   dotspacemacs-line-numbers '(:relative relative :size-limit-kb 1000)
    ;; Code folding method. Possible values are `evil' and `origami'.
    ;; (default 'evil)
    dotspacemacs-folding-method 'evil
@@ -341,6 +352,7 @@ you should place your code here."
    ;; Home-row escape
    evil-escape-key-sequence "jk"
    evil-escape-unordered-key-sequence t
+   evil-escape-delay 0.02
    magit-repository-directories '("~/repos/")
    )
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
@@ -348,6 +360,7 @@ you should place your code here."
   (global-git-commit-mode t)
   ;; Do not highlight current line by default.
   (global-hl-line-mode -1)
+  (golden-ratio-mode)
   )
 
 ;; Do not write anything past this comment. This is where Emacs will

@@ -20,6 +20,7 @@ fi
 PATH="$HOME/bin:$HOME/.local/bin:$PATH"
 PATH="/usr/games:$PATH"
 PATH="$HOME/Library/Haskell/bin:$PATH"
+PATH="$HOME/.cabal/bin:$PATH"
 PATH="/usr/local/opt/ruby/bin:$PATH"
 PATH="/usr/local/bin:$PATH"
 PATH="/usr/bin:$PATH"
