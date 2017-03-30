@@ -1,8 +1,6 @@
 import XMonad
 import XMonad.Util.EZConfig(additionalKeys)
 import XMonad.Wallpaper
-import XMonad.Actions.Volume
-import XMonad.Util.Dzen
 import Graphics.X11.ExtraTypes.XF86
 
 main :: IO()
