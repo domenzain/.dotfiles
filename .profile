@@ -35,3 +35,5 @@ PATH="/opt/local/sbin:$PATH"
 PATH="/usr/local/texlive/2013/bin/x86_64-darwin:$PATH"
 PATH="$HOME/.cargo/bin:$PATH"
 export PATH=$PATH
+
+export PATH="$HOME/.cargo/bin:$PATH"
