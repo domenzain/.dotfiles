@@ -1,0 +1,38 @@
+[user]
+    name = M. Domenzain
+    email = ld@airinov.fr
+	signingkey = 9DC929BC
+[alias]
+    ci = commit
+    co = checkout
+    cp = cherry-pick
+    d = difftool
+    m = mergetool
+    rb = rebase
+    st = status
+
+    ds = diff --staged
+    rha = reset --hard
+    ski = stash --keep-index
+
+    l = log --pretty=oneline --abbrev-commit
+    ll = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+    lg = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+    lll = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset%n' --abbrev-commit --stat
+    pu = "!f() { git push -u ${1:-origin} `git symbolic-ref --short HEAD`; }; f"
+[push]
+    default = simple
+[merge]
+    ff = yes
+    tool = vimdiff
+	conflictStyle = diff3
+[mergetool]
+    prompt = false
+[core]
+    autocrlf = input
+[color]
+    ui = auto
+[diff]
+    tool = vimdiff
+    conflictstyle = diff3
+    algorithm = patience
