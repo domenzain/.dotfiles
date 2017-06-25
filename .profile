@@ -37,3 +37,6 @@ PATH="$HOME/.cargo/bin:$PATH"
 export PATH=$PATH
 
 export PATH="$HOME/.cargo/bin:$PATH"
+
+GPG_TTY=$(tty)
+export GPG_TTY
