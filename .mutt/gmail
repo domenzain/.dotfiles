@@ -1,0 +1,22 @@
+# ==============  IMAP
+set imap_pass = "`pass mail/mutt/gmail | head -1`"
+set imap_user = "`pass mail/mutt/gmail | head -2 | tail -1`"
+set folder = imaps://imap.gmail.com/
+set spoolfile = '+INBOX'
+set postponed='+[Gmail]/Drafts'
+set mbox='+[Gmail]/All Mail'
+set trash='+[Gmail]/Trash'
+
+# ================  SMTP
+set smtp_url = "smtp://${imap_user}@smtp.gmail.com:587/"
+set smtp_pass = $imap_pass
+set ssl_force_tls = yes # Require encrypted connection
+
+# ================ Data
+set header_cache = ~/.mutt/gmail.data/cache/headers            
+set message_cachedir = ~/.mutt/gmail.data/cache/bodies         
+set certificate_file = ~/.mutt/gmail.data/certificates     
+
+# ================ Composition
+set realname = 'Luis Mario DOMENZAIN'
+set from = "$imap_user"

@@ -1,0 +1,22 @@
+# ==============  IMAP
+set imap_pass = "`pass airinov/mail | head -1`"
+set imap_user = "`pass airinov/mail | head -2 | tail -1`"
+set folder = "imaps://${imap_user}@imap.gmail.com/"
+set spoolfile = '+INBOX'
+set postponed='+[Gmail]/Drafts'
+set mbox='+[Gmail]/All Mail'
+set trash='+[Gmail]/Trash'
+
+# ================  SMTP
+set smtp_url = "smtp://${imap_user}@smtp.gmail.com:587/"
+set smtp_pass = $imap_pass
+set ssl_force_tls = yes # Require encrypted connection
+
+# ================ Data
+set header_cache = ~/.mutt/airinov.data/cache/headers            
+set message_cachedir = ~/.mutt/airinov.data/cache/bodies         
+set certificate_file = ~/.mutt/airinov.data/certificates     
+
+# ================ Composition
+set realname = 'Luis Mario DOMENZAIN'
+set from = "`pass airinov/mail | head -3 | tail -1`"

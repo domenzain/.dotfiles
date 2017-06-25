@@ -1,0 +1,42 @@
+# ===============  Folder hooks
+folder-hook 'gmail' 'source ~/.mutt/gmail'
+folder-hook 'airinov' 'source ~/.mutt/airinov'
+
+# =============== Switch accounts
+macro index <f2> '<sync-mailbox><enter-command>source ~/.mutt/gmail<enter><change-folder>!<enter>'
+macro index <f3> '<sync-mailbox><enter-command>source ~/.mutt/airinov<enter><change-folder>!<enter>'
+
+# =============== Default Account
+source ~/.mutt/airinov
+
+# =============== Reading
+auto_view text/html
+alternative_order text/plain text/html
+
+# =============== Composition
+set editor = `echo \$EDITOR`
+set edit_headers = yes  # See the headers when editing
+set charset = UTF-8     # value of $LANG; also fallback for send_charset
+# Sender, email address, and sign-off line must match
+unset use_domain        # because joe@localhost is just embarrassing
+set use_from = yes
+
+# ================ Crypto
+set crypt_autosign = no
+set crypt_replyencrypt = yes
+set crypt_replysignencrypted = yes
+set crypt_replysign = yes
+
+set crypt_use_gpgme = yes
+set crypt_use_pka=yes
+
+set pgp_autosign = no
+set pgp_replyencrypt = yes
+set pgp_replysignencrypted = yes
+set pgp_replysign = yes
+
+set pgp_sign_as = 0x26B1FA94 
+set pgp_use_gpg_agent = yes
+
+set pgp_timeout = 3600
+set pgp_verify_sig = yes
