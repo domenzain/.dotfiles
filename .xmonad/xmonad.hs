@@ -23,10 +23,13 @@ main = do
         , focusedBorderColor = "#00ff00"
         } `additionalKeys`
         [ ((mod1Mask .|. controlMask, xK_l), spawn "slock")
+        -- Media buttons
         , ((0, xF86XK_MonBrightnessUp  ), spawn "xbacklight -inc 5")
         , ((0, xF86XK_MonBrightnessDown), spawn "xbacklight -dec 5")
         , ((0, xF86XK_AudioLowerVolume), spawn "amixer -D pulse -- sset Master unmute 5%-")
         , ((0, xF86XK_AudioRaiseVolume), spawn "amixer -D pulse -- sset Master unmute 5%+")
         , ((0, xF86XK_AudioMute       ), spawn "amixer -D pulse -- sset Master toggle")
         , ((0, xF86XK_AudioMicMute    ), spawn "amixer -D pulse -- sset Capture toggle")
+        -- Shortcuts
+        , ((mod1Mask, xK_m), spawn "gnome-terminal -e mutt")
         ]
