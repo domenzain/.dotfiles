@@ -1,7 +1,16 @@
 import XMonad
 import XMonad.Util.EZConfig(additionalKeys)
-import XMonad.Wallpaper
+import XMonad.Wallpaper.Find
+import XMonad.Wallpaper.Expand
+import System.Random
 import Graphics.X11.ExtraTypes.XF86
+
+setRandomWallpaper :: [String] -> IO()
+setRandomWallpaper filepaths = do
+    rootPaths  <- mapM expand filepaths
+    candidates <- findImages rootPaths
+    wallpaper  <- ((!!) candidates) <$> getStdRandom (randomR (0, length candidates - 1))
+    spawn $ "feh --bg-fill " ++ wallpaper
 
 main :: IO()
 main = do
