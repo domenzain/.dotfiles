@@ -14,7 +14,7 @@ auto_view text/html
 alternative_order text/plain text/html
 
 # =============== Composition
-set editor = `echo \$EDITOR`
+set editor = "`echo $EDITOR`"
 set edit_headers = yes  # See the headers when editing
 set charset = UTF-8     # value of $LANG; also fallback for send_charset
 # Sender, email address, and sign-off line must match
