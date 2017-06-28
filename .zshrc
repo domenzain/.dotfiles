@@ -45,7 +45,8 @@ alias top=htop
 alias encrypt="gpg --encrypt --sign --armor --recipient ld@airinov.fr --recipient "
 alias epoch="date +%s"
 alias open=gnome-open
-alias vim='emacsclient -c'
+alias vim="$EDITOR"
+alias emacs="$EDITOR"
 alias azer='setxkbmap -rules evdev -model evdev -layout us -variant altgr-intl'
 alias qwer='setxkbmap fr'
 alias dots='/usr/bin/env git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
