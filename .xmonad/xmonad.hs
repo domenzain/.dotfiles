@@ -32,5 +32,5 @@ main = do
         , ((0, xF86XK_AudioMicMute    ), spawn "amixer -D pulse -- sset Capture toggle")
         -- Shortcuts
         , ((mod1Mask, xK_m), spawn "gnome-terminal -e mutt")
-        , ((mod1Mask, xK_e), spawn "gnome-terminal -e \"emacsclient -c\"")
+        , ((mod1Mask, xK_e), spawn "emacsclient -c")
         ]
