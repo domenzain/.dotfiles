@@ -362,6 +362,7 @@ If you are unsure, try setting them in `dotspacemacs/user-config' first."
    git-enable-magit-svn-plugin t
    evil-search-module 'evil-search
    )
+  (add-to-list 'auto-mode-alist '("/tmp/mutt-" . mail-mode))
   )
 
 (defun dotspacemacs/user-config ()
