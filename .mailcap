@@ -1,1 +1,2 @@
+application/vnd.ms-excel.sheet.binary.macroEnabled.12; soffice --nologo --calc '%s'; edit=soffice --nologo --calc '%s'; test=test -n "$DISPLAY"; description="Office Open XML Spreadsheet with Macros Enabled"; nametemplate=%s.xlsm
 text/html; firefox -new-window %s && sleep 1
