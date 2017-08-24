@@ -14,6 +14,7 @@ auto_view text/html
 alternative_order text/plain text/enriched text/html
 set sort = 'reverse-threads'
 set sort_aux = 'last-date-received'
+set timeout = 10
 
 source ~/.mutt/colors
 
