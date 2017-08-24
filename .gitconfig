@@ -1,16 +1,21 @@
 [alias]
+    b = branch
+    bd = branch -d
+    bdd = branch -D
     ci = commit
+    cia = commit --amend
     co = checkout
     cp = cherry-pick
     d = difftool
     m = mergetool
     rb = rebase
     st = status
-
+    spop = stash pop
+    
     ds = diff --staged
     rha = reset --hard
     ski = stash --keep-index
-
+    
     l = log --pretty=oneline --abbrev-commit
     ll = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
     lg = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
