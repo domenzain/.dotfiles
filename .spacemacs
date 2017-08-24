@@ -224,8 +224,8 @@ It should only modify the values of Spacemacs settings."
    ;; source settings. Else, disable fuzzy matching in all sources.
    ;; (default 'always)
    dotspacemacs-helm-use-fuzzy 'always
-   ;; If non-nil the paste micro-state is enabled. When enabled pressing `p'
-   ;; several times cycle between the kill ring content. (default nil)
+   ;; If non-nil, the paste transient-state is enabled. And pressing `p' several
+   ;; times, cycles through the elements in the `kill-ring'. (default nil)
    dotspacemacs-enable-paste-transient-state nil
    ;; Which-key delay in seconds. The which-key buffer is the popup listing
    ;; the commands bound to the current keystroke sequence. (default 0.4)
@@ -341,6 +341,10 @@ It should only modify the values of Spacemacs settings."
    ;; Either nil or a number of seconds. If non-nil zone out after the specified
    ;; number of seconds. (default nil)
    dotspacemacs-zone-out-when-idle nil
+   ;; Run `spacemacs/prettify-org-buffer' when
+   ;; visiting README.org files of Spacemacs.
+   ;; (default nil)
+   dotspacemacs-pretty-docs nil
    )
   (with-eval-after-load 'company
     (define-key company-active-map (kbd "C-w") 'evil-delete-backward-word)
@@ -388,3 +392,23 @@ before packages are loaded."
 
 ;; Do not write anything past this comment. This is where Emacs will
 ;; auto-generate custom variable definitions.
+(defun dotspacemacs/emacs-custom-settings ()
+  "Emacs custom settings.
+This is an auto-generated function, do not modify its content directly, use
+Emacs customize menu instead.
+This function is called at the very end of Spacemacs initialization."
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(evil-want-Y-yank-to-eol t)
+ '(standard-indent 8)
+ )
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
+)
