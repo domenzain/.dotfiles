@@ -1,7 +1,3 @@
-[user]
-    name = M. Domenzain
-    email = ld@airinov.fr
-	signingkey = 9DC929BC
 [alias]
     ci = commit
     co = checkout
@@ -36,3 +32,7 @@
     tool = vimdiff
     conflictstyle = diff3
     algorithm = patience
+[rerere]
+    enabled = true
+[include]
+    path = ~/.gitlocal
