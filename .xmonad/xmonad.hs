@@ -41,8 +41,8 @@ main = do
         , ((mod1Mask, xK_Tab), rotateWS True)
         , ((mod1Mask .|. shiftMask, xK_Tab), rotateWS False)
         -- Media buttons
-        , ((0, xF86XK_MonBrightnessUp  ), spawn "xbacklight -inc 5")
-        , ((0, xF86XK_MonBrightnessDown), spawn "xbacklight -dec 5")
+        , ((0, xF86XK_MonBrightnessUp  ), spawn "light -A 5")
+        , ((0, xF86XK_MonBrightnessDown), spawn "light -U 5")
         , ((0, xF86XK_AudioLowerVolume), spawn "amixer -D pulse -- sset Master unmute 5%-")
         , ((0, xF86XK_AudioRaiseVolume), spawn "amixer -D pulse -- sset Master unmute 5%+")
         , ((0, xF86XK_AudioMute       ), spawn "amixer -D pulse -- sset Master toggle")
