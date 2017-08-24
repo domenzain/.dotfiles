@@ -11,7 +11,7 @@ source ~/.mutt/airinov
 
 # =============== Reading
 auto_view text/html
-alternative_order text/plain text/html
+alternative_order text/plain text/enriched text/html
 set sort = 'reverse-threads'
 set sort_aux = 'last-date-received'
 
