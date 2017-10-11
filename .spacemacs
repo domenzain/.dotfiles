@@ -38,6 +38,7 @@ This function should only modify configuration layer settings."
      ;; Python
      (python :variables python-test-runner 'pytest)
      emacs-lisp
+     systemd
      markdown
      org
      ;; Javascript, JSON
@@ -60,6 +61,7 @@ This function should only modify configuration layer settings."
      colors
      ;; Version control
      git
+     github
      version-control
      helm
      )
