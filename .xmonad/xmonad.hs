@@ -30,7 +30,7 @@ rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) NonEmptyWS 1
 main :: IO()
 main = do
     setRandomWallpaper ["${HOME}/Pictures/Paintings/"]
-    xmonad $ defaultConfig
+    xmonad $ def
         { terminal    = "gnome-terminal"
         -- Borders
         , borderWidth = 2
@@ -49,8 +49,8 @@ main = do
         , ((0, xF86XK_AudioMicMute    ), spawn "amixer -D pulse -- sset Capture toggle")
         -- Shortcuts
         , ((mod1Mask, xK_m), spawn ("EDITOR='" ++ editor ++ "' gnome-terminal -e mutt"))
-        , ((mod1Mask .|. shiftMask, xK_e), spawn editor)
-        , ((mod1Mask .|. shiftMask, xK_p), passPrompt $ defaultXPConfig
+        , ((mod1Mask .|. controlMask, xK_e), spawn editor)
+        , ((mod1Mask .|. shiftMask, xK_p), passPrompt $ def
             { position = CenteredAt (1/4) (2/3)
             , font = "xft:Source Code Pro-9"
             })]
