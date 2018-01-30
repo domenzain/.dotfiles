@@ -68,3 +68,6 @@ setopt share_history # imports new commands and appends typed commands to histor
 # Make sure other completions are available
 fpath=(/usr/local/share/zsh-completions $fpath)
 compinit
+
+# added by travis gem
+[ -f /home/domenzain/.travis/travis.sh ] && source /home/domenzain/.travis/travis.sh
