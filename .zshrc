@@ -41,6 +41,7 @@ export EDITOR='emacsclient -c'
 
 # Useful aliases
 alias cal=gcal
+alias calw="gcal -K --iso-week-number=yes --starting-day=Monday"
 alias top=htop
 alias encrypt="gpg --encrypt --sign --armor --recipient ld@airinov.fr --recipient "
 alias epoch="date +%s"
