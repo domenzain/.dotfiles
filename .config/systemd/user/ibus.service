@@ -1,0 +1,12 @@
+[Unit]
+Description=Intelligent Input Bus
+Documentation=man:ibus-daemon(1)
+
+[Service]
+ExecStart=/usr/bin/ibus-daemon --replace --xim
+ExecStop=/usr/bin/ibus exit
+Environment=DISPLAY=:0
+Restart=always
+
+[Install]
+WantedBy=default.target
