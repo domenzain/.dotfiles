@@ -72,3 +72,5 @@ compinit
 
 # added by travis gem
 [ -f /home/domenzain/.travis/travis.sh ] && source /home/domenzain/.travis/travis.sh
+
+export ARDUINO_PATH=/usr/local/arduino
