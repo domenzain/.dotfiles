@@ -35,9 +35,10 @@ PATH="$HOME/.local/bin:$PATH"
 PATH="$HOME/.cargo/bin:$PATH"
 PATH="$HOME/.cabal/bin:$PATH"
 PATH="$HOME/Library/Haskell/bin:$PATH"
+PATH="$HOME/.emacs.d/layers/+window-management/exwm/files/:$PATH"
+PATH="/usr/local/cuda/bin/:$PATH"
+PATH="$HOME/.cargo/bin:$PATH"
 export PATH=$PATH
-
-export PATH="$HOME/.cargo/bin:$PATH"
 
 GPG_TTY=$(tty)
 export GPG_TTY
