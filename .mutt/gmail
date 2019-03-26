@@ -1,6 +1,6 @@
 # ==============  IMAP
-set imap_pass = "`pass mail/mutt/gmail | head -1`"
-set imap_user = "`pass mail/mutt/gmail | head -2 | tail -1`"
+set imap_pass = "`pass mail/imap/gmail | head -1`"
+set imap_user = "`pass mail/imap/gmail | head -2 | tail -1`"
 set folder = imaps://imap.gmail.com/
 set spoolfile = '+INBOX'
 set postponed='+[Gmail]/Drafts'

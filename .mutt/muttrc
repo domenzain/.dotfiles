@@ -7,7 +7,7 @@ macro index <f2> '<sync-mailbox><enter-command>source ~/.mutt/gmail<enter><chang
 macro index <f3> '<sync-mailbox><enter-command>source ~/.mutt/airinov<enter><change-folder>!<enter>'
 
 # =============== Default Account
-source ~/.mutt/airinov
+source ~/.mutt/gmail
 
 # =============== Reading
 auto_view text/html
@@ -45,3 +45,5 @@ set pgp_use_gpg_agent = yes
 
 set pgp_timeout = 3600
 set pgp_verify_sig = yes
+
+source ~/.mutt/smime
