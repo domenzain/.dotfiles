@@ -1,4 +1,4 @@
-;; -*- mode: emacs-lisp -*-
+;; -*- mode: emacs-lisp; lexical-binding: t -*-
 ;; This file is loaded by Spacemacs at startup.
 ;; It must be stored in your home directory.
 
@@ -33,7 +33,9 @@ This function should only modify configuration layer settings."
 
    ;; List of configuration layers to load.
    dotspacemacs-configuration-layers
-   '(octave
+   '(d
+     php
+     octave
      html
      haskell
      yaml
@@ -62,9 +64,16 @@ This function should only modify configuration layer settings."
      syntax-checking
      auto-completion
      spell-checking
+     multiple-cursors
+     treemacs
      colors
-     neotree
+     (mu4e :variables
+           mu4e-use-maildirs-extension t
+           mu4e-enable-notifications t)
+     ;; neotree
      helm
+     ;; ivy
+     pass
      ;; Version control
      git
      github
@@ -215,13 +224,13 @@ It should only modify the values of Spacemacs settings."
                          challenger-deep)
 
    ;; Set the theme for the Spaceline. Supported themes are `spacemacs',
-   ;; `all-the-icons', `custom', `vim-powerline' and `vanilla'. The first three
-   ;; are spaceline themes. `vanilla' is default Emacs mode-line. `custom' is a
-   ;; user defined themes, refer to the DOCUMENTATION.org for more info on how
-   ;; to create your own spaceline theme. Value can be a symbol or list with\
-   ;; additional properties.
+   ;; `all-the-icons', `custom', `doom', `vim-powerline' and `vanilla'. The
+   ;; first three are spaceline themes. `doom' is the doom-emacs mode-line.
+   ;; `vanilla' is default Emacs mode-line. `custom' is a user defined themes,
+   ;; refer to the DOCUMENTATION.org for more info on how to create your own
+   ;; spaceline theme. Value can be a symbol or list with additional properties.
    ;; (default '(spacemacs :separator wave :separator-scale 1.5))
-   dotspacemacs-mode-line-theme '(spacemacs :separator wave :separator-scale 1.5)
+   dotspacemacs-mode-line-theme '(spacemacs :separator wave :separator-scale 1.0)
 
    ;; If non-nil the cursor color matches the state color in GUI Emacs.
    ;; (default t)
@@ -233,7 +242,7 @@ It should only modify the values of Spacemacs settings."
                                :size 20
                                :weight normal
                                :width normal
-                               :powerline-scale 1.1)
+                               :powerline-scale 1.0)
    ;; The leader key (default "SPC")
    dotspacemacs-leader-key "SPC"
 
@@ -293,9 +302,9 @@ It should only modify the values of Spacemacs settings."
    ;; Maximum number of rollback slots to keep in the cache. (default 5)
    dotspacemacs-max-rollback-slots 5
 
-   ;; If non-nil, the paste transient-state is enabled. While enabled, pressing
-   ;; `p' several times cycles through the elements in the `kill-ring'.
-   ;; (default nil)
+   ;; If non-nil, the paste transient-state is enabled. While enabled, after you
+   ;; paste something, pressing `C-j' and `C-k' several times cycles through the
+   ;; elements in the `kill-ring'. (default nil)
    dotspacemacs-enable-paste-transient-state nil
 
    ;; Which-key delay in seconds. The which-key buffer is the popup listing
@@ -449,16 +458,15 @@ It should only modify the values of Spacemacs settings."
    ;; Run `spacemacs/prettify-org-buffer' when
    ;; visiting README.org files of Spacemacs.
    ;; (default nil)
-   dotspacemacs-pretty-docs t
-   )
-  (with-eval-after-load 'company
-    (define-key company-active-map (kbd "C-w") 'evil-delete-backward-word)
-    )
-  (with-eval-after-load 'helm
-    (define-key helm-map (kbd "C-w") 'evil-delete-backward-word)
-    )
-  )
+   dotspacemacs-pretty-docs t))
 
+(defun dotspacemacs/user-env ()
+  "Environment variables setup.
+This function defines the environment variables for your Emacs session. By
+default it calls `spacemacs/load-spacemacs-env' which loads the environment
+variables declared in `~/.spacemacs.env' or `~/.spacemacs.d/.spacemacs.env'.
+See the header of this file for more information."
+  (spacemacs/load-spacemacs-env))
 
 (defun dotspacemacs/user-init ()
   "Initialization for user code:
@@ -466,19 +474,39 @@ This function is called immediately after `dotspacemacs/init', before layer
 configuration.
 It is mostly for variables that should be set before packages are loaded.
 If you are unsure, try setting them in `dotspacemacs/user-config' first."
+  (setq configuration-layer--elpa-archives
+        '(("melpa" . "elpa.zilongshanren.com/melpa/")
+          ("org" . "elpa.zilongshanren.com/org/")
+          ("gnu" . "elpa.zilongshanren.com/gnu/")))
   (setq-default
    git-magit-status-fullscreen t
    git-enable-magit-svn-plugin t
    evil-search-module 'evil-search
    )
   (add-to-list 'auto-mode-alist '("/tmp/mutt-" . mail-mode))
-  )
+
+  ;; set `mu4e-context-policy` and `mu4e-compose-policy` to tweak when mu4e should
+  ;; guess or ask the correct context, e.g.
+
+  ;; compose with the current context is no context matches;
+  ;; default is to ask
+  ;; '(setq mu4e-compose-context-policy nil)
+
+  ;;; Set up some common mu4e variables
+  (setq-default
+   user-full-name "Luis Mario DOMENZAIN"
+   mu4e-maildir "~/.mail/mailbox"
+   mu4e-get-mail-command "mbsync -a"
+   mu4e-update-interval 30
+   mu4e-compose-signature-auto-include nil
+   mu4e-view-show-images t
+   mu4e-view-show-addresses t))
 
 (defun dotspacemacs/user-load ()
   "Library to load while dumping.
-This function is called while dumping Spacemacs configuration. You can
-`require' or `load' the libraries of your choice that will be included
-in the dump."
+This function is called only while dumping Spacemacs configuration. You can
+`require' or `load' the libraries of your choice that will be included in the
+dump."
   )
 
 (defun dotspacemacs/user-config ()
@@ -492,15 +520,98 @@ before packages are loaded."
    evil-escape-key-sequence "jk"
    evil-escape-unordered-key-sequence t
    evil-escape-delay 0.02
-   magit-repository-directories '("~/repos" "~/repos/airinov" "~/repos/sicilia/packages" "~/repos/sicilia/packages/test-bench")
+   magit-repository-directories '(("~/repos" . 4))
    )
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
   ;; If Emacs is open, take over commit messages in the current project.
   (global-git-commit-mode t)
   ;; Do not highlight current line by default.
   (global-hl-line-mode -1)
-  ;;(golden-ratio-mode)
+
+  ;; Make sure C-w kills a word in every text editing context
+  (with-eval-after-load 'company
+    (define-key company-active-map (kbd "C-w") 'evil-delete-backward-word)
+    )
+  (with-eval-after-load 'helm
+    (define-key helm-map (kbd "C-w") 'evil-delete-backward-word)
+    )
+  (setq
+   mu4e-contexts
+   `(
+     ,(make-mu4e-context
+       :name "work"
+       :enter-func (lambda () (mu4e-message "Switch to the work context"))
+       ;; leave-fun not defined
+       :match-func (lambda (msg)
+                     (when msg
+                       (or
+                        (string-match-p "^/work" (mu4e-message-field msg :maildir))
+                        (mu4e-message-contact-field-matches
+                         msg
+                         :to "luis.domenzan@parrot.com")
+                        (mu4e-message-contact-field-matches
+                         msg
+                         :to "ld@airinov.com"))))
+       :vars '((user-mail-address . "luis.domenzain@parrot.com")
+               ;; let Outlook deal with sent messages directly
+               (mu4e-sent-messages-behavior . sent)
+               (mu4e-drafts-folder . "/work/drafts")
+               (mu4e-trash-folder . "/work/trash")
+               (mu4e-sent-folder . "/work/sent")))
+   ,(make-mu4e-context
+     :name "personal"
+     :enter-func (lambda () (mu4e-message "Switch to the personal context"))
+     ;; leave-func not defined
+     :match-func (lambda (msg)
+                   (when msg
+                     (or
+                      (string-match-p "^/personal" (mu4e-message-field msg :maildir))
+                      (mu4e-message-contact-field-matches
+                       msg
+                       :to "luismario.domenzain@gmail.com"))))
+     :vars '((user-mail-address . "luismario.domenzain@gmail.com")
+             ;; let Gmail deal with sent messages directly
+             (mu4e-sent-messages-behavior . delete)
+             (mu4e-drafts-folder . "/personal/drafts")
+             (mu4e-trash-folder . "/personal/trash")
+             (mu4e-sent-folder . "/personal/sent")))))
+  ;; This sets `mu4e-user-mail-address-list' to the concatenation of all
+  ;; `user-mail-address' values for all contexts. If you have other mail
+  ;; addresses as well, you'll need to add those manually.
+  (setq mu4e-user-mail-address-list
+        (delq nil
+              (mapcar (lambda (context)
+                        (when (mu4e-context-vars context)
+                          (cdr (assq
+                                'user-mail-address
+                                (mu4e-context-vars context)))))
+                      mu4e-contexts)))
+  (setq mail-user-agent 'mu4e-user-agent
+        mml-secure-openpgp-encrypt-to-self t
+        mml-secure-openpgp-sign-with-sender t
+        mu4e-compose-crypto-reply-plain-policy nil
+        mu4e-compose-crypto-reply-encrypted-policy 'sign-and-encrypt)
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
 ;; auto-generate custom variable definitions.
+(defun dotspacemacs/emacs-custom-settings ()
+  "Emacs custom settings.
+This is an auto-generated function, do not modify its content directly, use
+Emacs customize menu instead.
+This function is called at the very end of Spacemacs initialization."
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(package-selected-packages
+   (quote
+    (yasnippet-snippets web-mode pipenv paradox orgit org-brain omnisharp intero helm-pass auth-source-pass git-link expand-region evil-matchit dumb-jump counsel-projectile counsel swiper centered-cursor-mode ace-link ivy ess anzu flycheck rtags helm magit transient ghub markdown-mode alert php-mode js2-mode which-key exwm org-plus-contrib zenburn-theme yapfify yaml-mode xterm-color xelb ws-butler winum web-beautify volatile-highlights vi-tilde-fringe uuidgen use-package treepy toc-org tagedit systemd symon string-inflection stickyfunc-enhance srefactor spinner spaceline-all-the-icons solarized-theme smeargle slim-mode shell-pop scss-mode sass-mode restart-emacs rainbow-mode rainbow-identifiers rainbow-delimiters pyvenv pytest pyenv-mode py-isort pug-mode protobuf-mode prettier-js pippel pip-requirements phpunit phpcbf php-extras php-auto-yasnippets persp-mode pcre2el password-store password-generator overseer org-projectile org-present org-pomodoro org-mime org-download org-bullets open-junk-file neotree nameless multi-term mu4e-maildirs-extension mu4e-alert move-text monokai-theme molokai-theme mmm-mode markdown-toc magithub magit-svn magit-gitflow magit-gh-pulls macrostep lv lorem-ipsum log4e livid-mode live-py-mode link-hint julia-mode json-navigator json-mode js2-refactor js-doc insert-shebang indent-guide importmagic impatient-mode hydra hungry-delete hlint-refactor hl-todo hindent highlight-parentheses highlight-numbers highlight-indentation helm-xref helm-themes helm-swoop helm-rtags helm-pydoc helm-purpose helm-projectile helm-mu helm-mode-manager helm-make helm-hoogle helm-gitignore helm-flx helm-exwm helm-descbinds helm-css-scss helm-cscope helm-company helm-c-yasnippet helm-ag haskell-snippets graphql google-translate google-c-style golden-ratio gnuplot gntp gitignore-templates github-search github-clone gitconfig-mode gitattributes-mode git-timemachine git-messenger git-gutter-fringe git-gutter-fringe+ gist gh-md fuzzy font-lock+ flyspell-correct-helm flycheck-rtags flycheck-pos-tip flycheck-haskell flycheck-bashate flx-ido fish-mode fill-column-indicator fancy-battery eyebrowse evil-visualstar evil-visual-mark-mode evil-unimpaired evil-tutor evil-surround evil-org evil-numbers evil-nerd-commenter evil-mc evil-magit evil-lisp-state evil-lion evil-indent-plus evil-iedit-state evil-goggles evil-exwm-state evil-exchange evil-escape evil-cleverparens evil-args evil-anzu eval-sexp-fu ess-R-data-view eshell-z eshell-prompt-extras esh-help emmet-mode elisp-slime-nav editorconfig drupal-mode dotenv-mode disaster diminish diff-hl define-word dante d-mode cython-mode csv-mode csharp-mode company-web company-tern company-statistics company-shell company-rtags company-php company-ghci company-ghc company-dcd company-cabal company-c-headers company-auctex company-anaconda column-enforce-mode color-identifiers-mode cmm-mode clean-aindent-mode clang-format challenger-deep-theme browse-at-remote auto-yasnippet auto-highlight-symbol auto-dictionary auto-compile aggressive-indent ace-window ace-jump-helm-line ac-ispell))))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
+)
