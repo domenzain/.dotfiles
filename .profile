@@ -38,6 +38,7 @@ PATH="$HOME/Library/Haskell/bin:$PATH"
 PATH="$HOME/.emacs.d/layers/+window-management/exwm/files/:$PATH"
 PATH="/usr/local/cuda/bin/:$PATH"
 PATH="$HOME/.cargo/bin:$PATH"
+PATH="$HOME/.local/bin:$PATH"
 export PATH=$PATH
 
 GPG_TTY=$(tty)
