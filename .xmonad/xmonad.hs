@@ -14,6 +14,8 @@ import System.Random
 import Graphics.X11.ExtraTypes.XF86
 import qualified Data.Map as M
 import System.Exit (exitSuccess )
+-- required to fix Java swing Arduino IDE
+import XMonad.Hooks.SetWMName
 
 setRandomWallpaper :: [String] -> IO()
 setRandomWallpaper filepaths = do

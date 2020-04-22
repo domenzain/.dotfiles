@@ -1,3 +1,4 @@
 /usr/bin/ibus-daemon -xr &
 # default xrandr configuration, machine specific.
 MULTIHEAD=.xmonad/xmonad-multihead-defaults && test -f $MULTIHEAD && source $MULTIHEAD
+wmname LG3D
