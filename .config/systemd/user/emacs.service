@@ -1,11 +1,12 @@
 [Unit]
 Description=Emacs: the extensible, self-documenting text editor
+Documentation=man:emacs(1) info:Emacs
 
 [Service]
-ExecStart=/usr/bin/emacs --fg-daemon
+ExecStart=/bin/bash -l -c 'exec /usr/bin/emacs --fg-daemon'
 ExecStop=/usr/bin/emacsclient --eval "(kill-emacs)"
-Environment=SSH_AUTH_SOCK=%t/keyring/ssh DISPLAY=:0
 Restart=always
+TimeoutStartSec=0
 
 [Install]
 WantedBy=default.target
