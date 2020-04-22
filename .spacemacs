@@ -26,14 +26,14 @@ This function should only modify configuration layer settings."
    ;; a layer lazily. (default t)
    dotspacemacs-ask-for-lazy-installation t
 
-   ;; If non-nil layers with lazy install support are lazy installed.
    ;; List of additional paths where to look for configuration layers.
    ;; Paths must have a trailing slash (i.e. `~/.mycontribs/')
    dotspacemacs-configuration-layer-path '()
 
    ;; List of configuration layers to load.
    dotspacemacs-configuration-layers
-   '(nginx
+   '(sml
+     nginx
      ruby
      d
      php
@@ -45,6 +45,7 @@ This function should only modify configuration layer settings."
      cscope
      csharp
      cmake
+     debug
      (python :variables python-test-runner 'pytest)
      emacs-lisp
      systemd
@@ -57,14 +58,16 @@ This function should only modify configuration layer settings."
      csv
      latex
      protobuf
-     ;; (shell :variables
-     ;;        shell-default-height 30
-     ;;        shell-default-position 'bottom)
+     (shell :variables
+            shell-default-height 30
+            shell-default-position 'top)
      ;; General
      shell-scripts
      shell
+     docker
      semantic
      syntax-checking
+     lsp
      auto-completion
      spell-checking
      multiple-cursors
@@ -158,8 +161,8 @@ It should only modify the values of Spacemacs settings."
    dotspacemacs-use-spacelpa nil
 
    ;; If non-nil then verify the signature for downloaded Spacelpa archives.
-   ;; (default nil)
-   dotspacemacs-verify-spacelpa-archives nil
+   ;; (default t)
+   dotspacemacs-verify-spacelpa-archives t
 
    ;; If non-nil then spacemacs will check for updates at startup
    ;; when the current branch is not `develop'. Note that checking for
@@ -179,9 +182,6 @@ It should only modify the values of Spacemacs settings."
    ;; section of the documentation for details on available variables.
    ;; (default 'vim)
    dotspacemacs-editing-style 'vim
-
-   ;; If non-nil output loading progress in `*Messages*' buffer. (default nil)
-   dotspacemacs-verbose-loading nil
 
    ;; Specify the startup banner. Default value is `official', it displays
    ;; the official spacemacs logo. An integer value is the index of text
@@ -220,8 +220,8 @@ It should only modify the values of Spacemacs settings."
    ;; List of themes, the first of the list is loaded when spacemacs starts.
    ;; Press `SPC T n' to cycle to the next theme in the list (works great
    ;; with 2 themes variants, one dark and one light)
-   dotspacemacs-themes '(molokai
-                         monokai
+   dotspacemacs-themes '(monokai
+                         molokai
                          misterioso
                          spacemacs-dark
                          spacemacs-light
@@ -246,7 +246,7 @@ It should only modify the values of Spacemacs settings."
 
    ;; Default font or prioritized list of fonts.
    dotspacemacs-default-font '("Source Code Pro"
-                               :size 20
+                               :size 18
                                :weight normal
                                :width normal)
 
@@ -409,7 +409,7 @@ It should only modify the values of Spacemacs settings."
    dotspacemacs-smartparens-strict-mode nil
 
    ;; If non-nil pressing the closing parenthesis `)' key in insert mode passes
-   ;; over any automatically added closing parenthesis, bracket, quote, etc…
+   ;; over any automatically added closing parenthesis, bracket, quote, etc...
    ;; This can be temporary disabled by pressing `C-q' before `)'. (default nil)
    dotspacemacs-smart-closing-parenthesis nil
 
@@ -540,6 +540,7 @@ before packages are loaded."
    evil-escape-unordered-key-sequence t
    evil-escape-delay 0.02
    magit-repository-directories '(("~/repos" . 4))
+   magit-diff-refine-hunk t
    )
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
   ;; If Emacs is open, take over commit messages in the current project.
@@ -634,9 +635,11 @@ This function is called at the very end of Spacemacs initialization."
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(evil-want-Y-yank-to-eol nil)
+ '(org-agenda-files (quote ("~/org/photog.org")))
  '(package-selected-packages
    (quote
-    (nginx-mode helm-ctest cmake-mode cmake-ide levenshtein seeing-is-believing rvm ruby-tools ruby-test-mode ruby-refactor ruby-hash-syntax rubocop rspec-mode robe rbenv rake minitest helm-gtags ggtags enh-ruby-mode counsel-gtags chruby bundler inf-ruby yasnippet-snippets web-mode pipenv paradox orgit org-brain omnisharp intero helm-pass auth-source-pass git-link expand-region evil-matchit dumb-jump counsel-projectile counsel swiper centered-cursor-mode ace-link ivy ess anzu flycheck rtags helm magit transient ghub markdown-mode alert php-mode js2-mode which-key exwm org-plus-contrib zenburn-theme yapfify yaml-mode xterm-color xelb ws-butler winum web-beautify volatile-highlights vi-tilde-fringe uuidgen use-package treepy toc-org tagedit systemd symon string-inflection stickyfunc-enhance srefactor spinner spaceline-all-the-icons solarized-theme smeargle slim-mode shell-pop scss-mode sass-mode restart-emacs rainbow-mode rainbow-identifiers rainbow-delimiters pyvenv pytest pyenv-mode py-isort pug-mode protobuf-mode prettier-js pippel pip-requirements phpunit phpcbf php-extras php-auto-yasnippets persp-mode pcre2el password-store password-generator overseer org-projectile org-present org-pomodoro org-mime org-download org-bullets open-junk-file neotree nameless multi-term mu4e-maildirs-extension mu4e-alert move-text monokai-theme molokai-theme mmm-mode markdown-toc magithub magit-svn magit-gitflow magit-gh-pulls macrostep lv lorem-ipsum log4e livid-mode live-py-mode link-hint julia-mode json-navigator json-mode js2-refactor js-doc insert-shebang indent-guide importmagic impatient-mode hydra hungry-delete hlint-refactor hl-todo hindent highlight-parentheses highlight-numbers highlight-indentation helm-xref helm-themes helm-swoop helm-rtags helm-pydoc helm-purpose helm-projectile helm-mu helm-mode-manager helm-make helm-hoogle helm-gitignore helm-flx helm-exwm helm-descbinds helm-css-scss helm-cscope helm-company helm-c-yasnippet helm-ag haskell-snippets graphql google-translate google-c-style golden-ratio gnuplot gntp gitignore-templates github-search github-clone gitconfig-mode gitattributes-mode git-timemachine git-messenger git-gutter-fringe git-gutter-fringe+ gist gh-md fuzzy font-lock+ flyspell-correct-helm flycheck-rtags flycheck-pos-tip flycheck-haskell flycheck-bashate flx-ido fish-mode fill-column-indicator fancy-battery eyebrowse evil-visualstar evil-visual-mark-mode evil-unimpaired evil-tutor evil-surround evil-org evil-numbers evil-nerd-commenter evil-mc evil-magit evil-lisp-state evil-lion evil-indent-plus evil-iedit-state evil-goggles evil-exwm-state evil-exchange evil-escape evil-cleverparens evil-args evil-anzu eval-sexp-fu ess-R-data-view eshell-z eshell-prompt-extras esh-help emmet-mode elisp-slime-nav editorconfig drupal-mode dotenv-mode disaster diminish diff-hl define-word dante d-mode cython-mode csv-mode csharp-mode company-web company-tern company-statistics company-shell company-rtags company-php company-ghci company-ghc company-dcd company-cabal company-c-headers company-auctex company-anaconda column-enforce-mode color-identifiers-mode cmm-mode clean-aindent-mode clang-format challenger-deep-theme browse-at-remote auto-yasnippet auto-highlight-symbol auto-dictionary auto-compile aggressive-indent ace-window ace-jump-helm-line ac-ispell)))
+    (dockerfile-mode docker tablist docker-tramp ob-sml sml-mode dap-mode bui nginx-mode helm-ctest cmake-mode cmake-ide levenshtein seeing-is-believing rvm ruby-tools ruby-test-mode ruby-refactor ruby-hash-syntax rubocop rspec-mode robe rbenv rake minitest helm-gtags ggtags enh-ruby-mode counsel-gtags chruby bundler inf-ruby yasnippet-snippets web-mode pipenv paradox orgit org-brain omnisharp intero helm-pass auth-source-pass git-link expand-region evil-matchit dumb-jump counsel-projectile counsel swiper centered-cursor-mode ace-link ivy ess anzu flycheck rtags helm magit transient ghub markdown-mode alert php-mode js2-mode which-key exwm org-plus-contrib zenburn-theme yapfify yaml-mode xterm-color xelb ws-butler winum web-beautify volatile-highlights vi-tilde-fringe uuidgen use-package treepy toc-org tagedit systemd symon string-inflection stickyfunc-enhance srefactor spinner spaceline-all-the-icons solarized-theme smeargle slim-mode shell-pop scss-mode sass-mode restart-emacs rainbow-mode rainbow-identifiers rainbow-delimiters pyvenv pytest pyenv-mode py-isort pug-mode protobuf-mode prettier-js pippel pip-requirements phpunit phpcbf php-extras php-auto-yasnippets persp-mode pcre2el password-store password-generator overseer org-projectile org-present org-pomodoro org-mime org-download org-bullets open-junk-file neotree nameless multi-term mu4e-maildirs-extension mu4e-alert move-text monokai-theme molokai-theme mmm-mode markdown-toc magithub magit-svn magit-gitflow magit-gh-pulls macrostep lv lorem-ipsum log4e livid-mode live-py-mode link-hint julia-mode json-navigator json-mode js2-refactor js-doc insert-shebang indent-guide importmagic impatient-mode hydra hungry-delete hlint-refactor hl-todo hindent highlight-parentheses highlight-numbers highlight-indentation helm-xref helm-themes helm-swoop helm-rtags helm-pydoc helm-purpose helm-projectile helm-mu helm-mode-manager helm-make helm-hoogle helm-gitignore helm-flx helm-exwm helm-descbinds helm-css-scss helm-cscope helm-company helm-c-yasnippet helm-ag haskell-snippets graphql google-translate google-c-style golden-ratio gnuplot gntp gitignore-templates github-search github-clone gitconfig-mode gitattributes-mode git-timemachine git-messenger git-gutter-fringe git-gutter-fringe+ gist gh-md fuzzy font-lock+ flyspell-correct-helm flycheck-rtags flycheck-pos-tip flycheck-haskell flycheck-bashate flx-ido fish-mode fill-column-indicator fancy-battery eyebrowse evil-visualstar evil-visual-mark-mode evil-unimpaired evil-tutor evil-surround evil-org evil-numbers evil-nerd-commenter evil-mc evil-magit evil-lisp-state evil-lion evil-indent-plus evil-iedit-state evil-goggles evil-exwm-state evil-exchange evil-escape evil-cleverparens evil-args evil-anzu eval-sexp-fu ess-R-data-view eshell-z eshell-prompt-extras esh-help emmet-mode elisp-slime-nav editorconfig drupal-mode dotenv-mode disaster diminish diff-hl define-word dante d-mode cython-mode csv-mode csharp-mode company-web company-tern company-statistics company-shell company-rtags company-php company-ghci company-ghc company-dcd company-cabal company-c-headers company-auctex company-anaconda column-enforce-mode color-identifiers-mode cmm-mode clean-aindent-mode clang-format challenger-deep-theme browse-at-remote auto-yasnippet auto-highlight-symbol auto-dictionary auto-compile aggressive-indent ace-window ace-jump-helm-line ac-ispell)))
+ '(scroll-margin 25)
  '(send-mail-function (quote smtpmail-send-it))
  '(smtpmail-smtp-server "smtp.office365.com")
  '(smtpmail-smtp-service 25))
