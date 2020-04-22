@@ -1,6 +1,8 @@
 import XMonad
 import XMonad.Actions.CycleWS
 import XMonad.Actions.PhysicalScreens
+import XMonad.Actions.Navigation2D
+import XMonad.Hooks.EwmhDesktops
 import XMonad.StackSet
 import XMonad.Util.WorkspaceCompare
 import XMonad.Wallpaper.Expand
@@ -35,7 +37,7 @@ rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) NonEmptyWS 1
         bToDir False = Prev
 
 myKeys :: XConfig Layout -> M.Map (KeyMask, KeySym) (X ())
-myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList
+myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
   [ ((configModMask, xK_l), spawn "slock")
   , ((configModMask, xK_Tab), rotateWS True)
   , ((configModMask .|. shiftMask, xK_Tab), rotateWS False)
@@ -49,6 +51,7 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList
     -- Displays
   , ((configModMask, xK_Left), onPrevNeighbour verticalScreenOrderer view)
   , ((configModMask, xK_Right), onNextNeighbour verticalScreenOrderer view)
+
   , ((configModMask .|. shiftMask, xK_Left),
       onPrevNeighbour verticalScreenOrderer shift
       >> onPrevNeighbour verticalScreenOrderer view)
@@ -96,8 +99,16 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList
                                      { position = CenteredAt (1/4) (2/3)
                                      , font = "xft:Source Code Pro-9"
                                      })
+  ] ++
+  [ ((m .|. configModMask, k), windows $ f i)
+  | (i, k) <- zip (XMonad.workspaces configDefault) [xK_1 .. xK_9]
+  , (f, m) <- [(greedyView, 0), (shift, shiftMask)]
   ]
-
+  -- ++
+  -- [((m .|. configModMask, key), screenWorkspace sc >>= flip whenJust (windows . f))
+  -- | (key, sc) <- zip [xK_n, xK_t, xK_t] [0..]
+  -- , (f, m) <- [(view, 0), (shift, shiftMask)]
+  -- ]
 
 myLayout = Mirror tiled ||| Grid ||| Accordion ||| Full
     where
@@ -109,7 +120,7 @@ myLayout = Mirror tiled ||| Grid ||| Accordion ||| Full
 main :: IO()
 main = do
     setRandomWallpaper ["${HOME}/Pictures/Paintings/"]
-    xmonad $ def
+    xmonad $ ewmh $ def
       { terminal    = "gnome-terminal"
                     -- Borders
     , borderWidth = 2
