@@ -12,7 +12,7 @@
 if [ -n "$BASH_VERSION" ]; then
     # include .bashrc if it exists
     if [ -f "$HOME/.bashrc" ]; then
-	. "$HOME/.bashrc"
+        . "$HOME/.bashrc"
     fi
 fi
 
@@ -39,7 +39,19 @@ PATH="$HOME/.emacs.d/layers/+window-management/exwm/files/:$PATH"
 PATH="/usr/local/cuda/bin/:$PATH"
 PATH="$HOME/.cargo/bin:$PATH"
 PATH="$HOME/.local/bin:$PATH"
+PATH="$HOME/perl5/bin:$PATH"
 export PATH=$PATH
+
+PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"
+PERL_LOCAL_LIB_ROOT="$HOME/perl5${PERL_LOCAL_LIB_ROOT:+:${PERL_LOCAL_LIB_ROOT}}"
+PERL_MB_OPT="--install_base \"$HOME/perl5\""
+PERL_MM_OPT="INSTALL_BASE=$HOME/perl5"
+export PERL5LIB=$PERL5LIB
+export PERL_LOCAL_LIB_ROOT=$PERL_LOCAL_LIB_ROOT
+export PERL_MB_OPT=$PERL_MB_OPT
+export PERL_MM_OPT=$PERL_MM_OPT
+
+export ARDUINO_PATH=/usr/local/arduino
 
 GPG_TTY=$(tty)
 export GPG_TTY

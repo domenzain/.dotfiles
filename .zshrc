@@ -82,14 +82,3 @@ setopt share_history # imports new commands and appends typed commands to histor
 fpath=(/usr/local/share/zsh-completions $fpath)
 compinit
 autoload -U bashcompinit && bashcompinit
-
-# added by travis gem
-[ -f /home/domenzain/.travis/travis.sh ] && source /home/domenzain/.travis/travis.sh
-
-export ARDUINO_PATH=/usr/local/arduino
-
-PATH="/home/domenzain/perl5/bin${PATH:+:${PATH}}"; export PATH;
-PERL5LIB="/home/domenzain/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"; export PERL5LIB;
-PERL_LOCAL_LIB_ROOT="/home/domenzain/perl5${PERL_LOCAL_LIB_ROOT:+:${PERL_LOCAL_LIB_ROOT}}"; export PERL_LOCAL_LIB_ROOT;
-PERL_MB_OPT="--install_base \"/home/domenzain/perl5\""; export PERL_MB_OPT;
-PERL_MM_OPT="INSTALL_BASE=/home/domenzain/perl5"; export PERL_MM_OPT;
