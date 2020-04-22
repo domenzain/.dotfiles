@@ -22,7 +22,7 @@ setRandomWallpaper filepaths = do
     rootPaths  <- mapM expand filepaths
     candidates <- findImages rootPaths
     wallpaper  <- (!!) candidates <$> getStdRandom (randomR (0, length candidates - 1))
-    spawn $ "feh --bg-fill " ++ wallpaper
+    spawn $ "feh --bg-fill --no-xinerama " ++ wallpaper
 
 -- TODO: get $EDITOR and pass it on
 editor :: String
