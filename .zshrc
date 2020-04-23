@@ -63,6 +63,7 @@ alias emacs="$EDITOR"
 alias azer='setxkbmap -rules evdev -model evdev -layout us -variant altgr-intl'
 alias qwer='setxkbmap fr'
 alias dots='/usr/bin/env git --git-dir=$HOME/.dotfiles/ --work-tree=$HOME'
+compdef dots=git
 alias lt='ls -lthr'
 
 # ===== History
