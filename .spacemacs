@@ -269,8 +269,10 @@ It should only modify the values of Spacemacs settings."
    dotspacemacs-major-mode-leader-key ","
 
    ;; Major mode leader key accessible in `emacs state' and `insert state'.
-   ;; (default "C-M-m")
-   dotspacemacs-major-mode-emacs-leader-key "C-M-m"
+   ;; (default "C-M-m" for terminal mode, "<M-return>" for GUI mode).
+   ;; Thus M-RET should work as leader key in both GUI and terminal modes.
+   ;; C-M-m also should work in terminal mode, but not in GUI mode.
+   dotspacemacs-major-mode-emacs-leader-key (if window-system "<M-return>" "C-M-m")
 
    ;; These variables control whether separate commands are bound in the GUI to
    ;; the key pairs `C-i', `TAB' and `C-m', `RET'.
@@ -468,6 +470,13 @@ It should only modify the values of Spacemacs settings."
    ;; (default nil)
    dotspacemacs-whitespace-cleanup 'changed
 
+   ;; If non nil activate `clean-aindent-mode' which tries to correct
+   ;; virtual indentation of simple modes. This can interfer with mode specific
+   ;; indent handling like has been reported for `go-mode'.
+   ;; If it does deactivate it here.
+   ;; (default t)
+   dotspacemacs-use-clean-aindent-mode t
+
    ;; Either nil or a number of seconds. If non-nil zone out after the specified
    ;; number of seconds. (default nil)
    dotspacemacs-zone-out-when-idle 120
@@ -624,29 +633,3 @@ before packages are loaded."
 
 ;; Do not write anything past this comment. This is where Emacs will
 ;; auto-generate custom variable definitions.
-(defun dotspacemacs/emacs-custom-settings ()
-  "Emacs custom settings.
-This is an auto-generated function, do not modify its content directly, use
-Emacs customize menu instead.
-This function is called at the very end of Spacemacs initialization."
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- '(evil-want-Y-yank-to-eol nil)
- '(org-agenda-files (quote ("~/org/photog.org")))
- '(package-selected-packages
-   (quote
-    (dockerfile-mode docker tablist docker-tramp ob-sml sml-mode dap-mode bui nginx-mode helm-ctest cmake-mode cmake-ide levenshtein seeing-is-believing rvm ruby-tools ruby-test-mode ruby-refactor ruby-hash-syntax rubocop rspec-mode robe rbenv rake minitest helm-gtags ggtags enh-ruby-mode counsel-gtags chruby bundler inf-ruby yasnippet-snippets web-mode pipenv paradox orgit org-brain omnisharp intero helm-pass auth-source-pass git-link expand-region evil-matchit dumb-jump counsel-projectile counsel swiper centered-cursor-mode ace-link ivy ess anzu flycheck rtags helm magit transient ghub markdown-mode alert php-mode js2-mode which-key exwm org-plus-contrib zenburn-theme yapfify yaml-mode xterm-color xelb ws-butler winum web-beautify volatile-highlights vi-tilde-fringe uuidgen use-package treepy toc-org tagedit systemd symon string-inflection stickyfunc-enhance srefactor spinner spaceline-all-the-icons solarized-theme smeargle slim-mode shell-pop scss-mode sass-mode restart-emacs rainbow-mode rainbow-identifiers rainbow-delimiters pyvenv pytest pyenv-mode py-isort pug-mode protobuf-mode prettier-js pippel pip-requirements phpunit phpcbf php-extras php-auto-yasnippets persp-mode pcre2el password-store password-generator overseer org-projectile org-present org-pomodoro org-mime org-download org-bullets open-junk-file neotree nameless multi-term mu4e-maildirs-extension mu4e-alert move-text monokai-theme molokai-theme mmm-mode markdown-toc magithub magit-svn magit-gitflow magit-gh-pulls macrostep lv lorem-ipsum log4e livid-mode live-py-mode link-hint julia-mode json-navigator json-mode js2-refactor js-doc insert-shebang indent-guide importmagic impatient-mode hydra hungry-delete hlint-refactor hl-todo hindent highlight-parentheses highlight-numbers highlight-indentation helm-xref helm-themes helm-swoop helm-rtags helm-pydoc helm-purpose helm-projectile helm-mu helm-mode-manager helm-make helm-hoogle helm-gitignore helm-flx helm-exwm helm-descbinds helm-css-scss helm-cscope helm-company helm-c-yasnippet helm-ag haskell-snippets graphql google-translate google-c-style golden-ratio gnuplot gntp gitignore-templates github-search github-clone gitconfig-mode gitattributes-mode git-timemachine git-messenger git-gutter-fringe git-gutter-fringe+ gist gh-md fuzzy font-lock+ flyspell-correct-helm flycheck-rtags flycheck-pos-tip flycheck-haskell flycheck-bashate flx-ido fish-mode fill-column-indicator fancy-battery eyebrowse evil-visualstar evil-visual-mark-mode evil-unimpaired evil-tutor evil-surround evil-org evil-numbers evil-nerd-commenter evil-mc evil-magit evil-lisp-state evil-lion evil-indent-plus evil-iedit-state evil-goggles evil-exwm-state evil-exchange evil-escape evil-cleverparens evil-args evil-anzu eval-sexp-fu ess-R-data-view eshell-z eshell-prompt-extras esh-help emmet-mode elisp-slime-nav editorconfig drupal-mode dotenv-mode disaster diminish diff-hl define-word dante d-mode cython-mode csv-mode csharp-mode company-web company-tern company-statistics company-shell company-rtags company-php company-ghci company-ghc company-dcd company-cabal company-c-headers company-auctex company-anaconda column-enforce-mode color-identifiers-mode cmm-mode clean-aindent-mode clang-format challenger-deep-theme browse-at-remote auto-yasnippet auto-highlight-symbol auto-dictionary auto-compile aggressive-indent ace-window ace-jump-helm-line ac-ispell)))
- '(scroll-margin 25)
- '(send-mail-function (quote smtpmail-send-it))
- '(smtpmail-smtp-server "smtp.office365.com")
- '(smtpmail-smtp-service 25))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; Your init file should contain only one such instance.
- ;; If there is more than one, they won't work right.
- )
-)
