@@ -16,10 +16,10 @@ if [ -n "$BASH_VERSION" ]; then
     fi
 fi
 
+
 # PATH configuration...
 PATH="/usr/games:$PATH"
 PATH="/usr/local/opt/ruby/bin:$PATH"
-PATH="/usr/local/bin:$PATH"
 PATH="/usr/bin:$PATH"
 PATH="/bin:$PATH"
 PATH="/usr/local/sbin:$PATH"
@@ -40,6 +40,7 @@ PATH="/usr/local/cuda/bin/:$PATH"
 PATH="$HOME/.cargo/bin:$PATH"
 PATH="$HOME/.local/bin:$PATH"
 PATH="$HOME/perl5/bin:$PATH"
+PATH="/usr/local/bin:$PATH"
 export PATH=$PATH
 
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"
