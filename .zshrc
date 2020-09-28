@@ -31,9 +31,11 @@ cabal
 cargo
 docker
 docker-compose
+fzf
 git
 git-extras
 pass
+ripgrep
 repo
 rsync
 tmux
