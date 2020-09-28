@@ -3,8 +3,8 @@ Description=Emacs: the extensible, self-documenting text editor
 Documentation=man:emacs(1) info:Emacs
 
 [Service]
-ExecStart=/bin/bash -l -c 'exec /usr/bin/emacs --fg-daemon'
-ExecStop=/usr/bin/emacsclient --eval "(kill-emacs)"
+ExecStart=/bin/bash -l -c 'exec /usr/local/bin/emacs --fg-daemon'
+ExecStop=/usr/local/bin/emacsclient --eval "(kill-emacs)"
 Restart=always
 TimeoutStartSec=0
 

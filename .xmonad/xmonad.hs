@@ -28,7 +28,7 @@ setRandomWallpaper filepaths = do
 
 -- TODO: get $EDITOR and pass it on
 editor :: String
-editor = "emacsclient -c"
+editor = "/usr/local/bin/emacsclient -c"
 
 rotateWS :: Bool -> X()
 rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) NonEmptyWS 1
@@ -119,7 +119,7 @@ myLayout = Mirror tiled ||| Grid ||| Accordion ||| Full
 
 main :: IO()
 main = do
-    setRandomWallpaper ["${HOME}/Pictures/Paintings/"]
+    setRandomWallpaper ["${HOME}/Pictures/Paintings"]
     xmonad $ ewmh $ def
       { terminal    = "gnome-terminal"
                     -- Borders
