@@ -57,3 +57,5 @@ export ARDUINO_PATH=/usr/local/arduino
 
 GPG_TTY=$(tty)
 export GPG_TTY
+
+export PATH="$HOME/.cargo/bin:$PATH"
