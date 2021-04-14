@@ -600,7 +600,9 @@ before packages are loaded."
    )
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
   ;; If Emacs is open, take over commit messages in the current project.
-  (global-git-commit-mode t)
+  (with-eval-after-load 'git-commit
+   (global-git-commit-mode t)
+   )
   ;; Do not highlight current line by default.
   (global-hl-line-mode -1)
 
