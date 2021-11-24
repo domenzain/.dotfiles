@@ -5,8 +5,6 @@ import XMonad.Actions.Navigation2D
 import XMonad.Hooks.EwmhDesktops
 import XMonad.StackSet
 import XMonad.Util.WorkspaceCompare
-import XMonad.Wallpaper.Expand
-import XMonad.Wallpaper.Find
 import XMonad.Prompt
 import XMonad.Prompt.Pass
 import XMonad.Layout
@@ -19,16 +17,10 @@ import System.Exit (exitSuccess )
 -- required to fix Java swing Arduino IDE
 import XMonad.Hooks.SetWMName
 
-setRandomWallpaper :: [String] -> IO()
-setRandomWallpaper filepaths = do
-    rootPaths  <- mapM expand filepaths
-    candidates <- findImages rootPaths
-    wallpaper  <- (!!) candidates <$> getStdRandom (randomR (0, length candidates - 1))
-    spawn $ "feh --bg-fill --no-xinerama " ++ wallpaper
 
 -- TODO: get $EDITOR and pass it on
 editor :: String
-editor = "/usr/local/bin/emacsclient -c"
+editor = "/usr/bin/emacsclient -c"
 
 rotateWS :: Bool -> X()
 rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) NonEmptyWS 1
@@ -119,7 +111,6 @@ myLayout = Mirror tiled ||| Grid ||| Accordion ||| Full
 
 main :: IO()
 main = do
-    setRandomWallpaper ["${HOME}/Pictures/Paintings"]
     xmonad $ ewmh $ def
       { terminal    = "gnome-terminal"
                     -- Borders
