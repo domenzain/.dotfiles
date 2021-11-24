@@ -61,4 +61,4 @@ export GPG_TTY
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
-export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3
+export VIRTUALENVWRAPPER_PYTHON=$(which python3)
