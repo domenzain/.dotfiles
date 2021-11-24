@@ -54,3 +54,5 @@
 	process = git-lfs filter-process
 [pull]
 	rebase = true
+[sumbodule]
+	stickyRecursiveClone = true
