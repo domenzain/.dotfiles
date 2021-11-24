@@ -41,7 +41,6 @@ PATH="$HOME/.cargo/bin:$PATH"
 PATH="$HOME/.local/bin:$PATH"
 PATH="$HOME/perl5/bin:$PATH"
 PATH="/usr/local/bin:$PATH"
-PATH="/usr/local/share/python:$PATH"
 export PATH=$PATH
 
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"
