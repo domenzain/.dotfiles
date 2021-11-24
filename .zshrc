@@ -36,17 +36,23 @@ fzf
 git
 git-extras
 pass
-ripgrep
 repo
+ripgrep
 rsync
+ssh-agent
 tmux
 virtualenvwrapper
 )
 
-source $ZSH/oh-my-zsh.sh
+
+zstyle :omz:plugins:ssh-agent agent-forwarding yes
+zstyle :omz:plugins:ssh-agent quiet yes
 
 # Obtain common PATH
 source $HOME/.profile
+
+# set everything else up
+source $ZSH/oh-my-zsh.sh
 
 # Disable autocorrect.
 unsetopt correct_all
@@ -60,7 +66,7 @@ alias calw="gcal -K --iso-week-number=yes --starting-day=Monday"
 alias top=htop
 alias encrypt="gpg --encrypt --sign --armor --recipient ld@airinov.fr --recipient "
 alias epoch="date +%s"
-alias open=gnome-open
+alias open=xdg-open
 alias vim="$EDITOR"
 alias emacs="$EDITOR"
 alias azer='setxkbmap -rules evdev -model evdev -layout us -variant altgr-intl'
