@@ -54,6 +54,7 @@ export PERL_MM_OPT=$PERL_MM_OPT
 
 export ARDUINO_PATH=/usr/local/arduino
 export KALEIDOSCOPE_DIR="$HOME/repos/tools/kaleidoscope"
+export FZF_BASE="$HOME/repos/tools/fzf"
 
 GPG_TTY=$(tty)
 export GPG_TTY
