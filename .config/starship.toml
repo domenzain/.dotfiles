@@ -4,3 +4,9 @@ success_symbol = "[➜](bold green)"
 [directory]
 truncate_to_repo = false
 truncation_length = 10
+
+[hostname]
+format = "@[$hostname]($style) "
+
+[username]
+format = "[$user]($style)"
