@@ -54,6 +54,10 @@ source $HOME/.profile
 # set everything else up
 source $ZSH/oh-my-zsh.sh
 
+# load GoPro stuff
+GOPRO=$HOME/.bash_aliases
+test -f "$GOPRO" && source "$GOPRO"
+
 # Disable autocorrect.
 unsetopt correct_all
 
