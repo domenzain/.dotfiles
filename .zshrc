@@ -27,18 +27,20 @@ COMPLETION_WAITING_DOTS="true"
 # Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
 # Example format: plugins=(rails git textmate ruby lighthouse)
 plugins=(
+battery
 brew
 cabal
-cargo
 docker
 docker-compose
 fzf
 git
 git-extras
+gpg-agent
 pass
 repo
 ripgrep
 rsync
+rust
 ssh-agent
 tmux
 virtualenvwrapper
