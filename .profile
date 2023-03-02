@@ -58,6 +58,7 @@ export FZF_BASE="$HOME/repos/tools/fzf"
 
 GPG_TTY=$(tty)
 export GPG_TTY
+export SSH_AUTH_SOCK
 
 export PATH="$HOME/.cargo/bin:$PATH"
 
