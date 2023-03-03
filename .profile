@@ -37,10 +37,12 @@ PATH="$HOME/.cabal/bin:$PATH"
 PATH="$HOME/Library/Haskell/bin:$PATH"
 PATH="$HOME/.emacs.d/layers/+window-management/exwm/files/:$PATH"
 PATH="/usr/local/cuda/bin/:$PATH"
-PATH="$HOME/.cargo/bin:$PATH"
 PATH="$HOME/.local/bin:$PATH"
 PATH="$HOME/perl5/bin:$PATH"
 PATH="/usr/local/bin:$PATH"
+PATH="/usr/local/go/bin:$PATH"
+PATH="$HOME/go/bin:$PATH"
+PATH="$HOME/.config/nvm/versions/node/v18.14.0/bin:$PATH"
 export PATH=$PATH
 
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"
