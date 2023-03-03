@@ -100,5 +100,9 @@ setopt share_history # imports new commands and appends typed commands to histor
 
 # Make sure other completions are available
 fpath=(/usr/local/share/zsh-completions $fpath)
-compinit
 autoload -U bashcompinit && bashcompinit
+
+autoload -Uz compinit
+zstyle ':completion:*' menu select
+fpath+=~/.zfunc
+compinit
