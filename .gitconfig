@@ -1,7 +1,4 @@
 [alias]
-	b = branch
-	bd = branch -d
-	bdd = branch -D
 	ci = commit
 	cia = commit --amend
 	co = checkout
@@ -10,17 +7,13 @@
 	m = mergetool
 	rb = rebase
 	st = status
-	spop = stash pop
-	
-	ds = diff --staged
+
 	rha = reset --hard
-	ski = stash --keep-index
-	
+
 	l = log --pretty=oneline --abbrev-commit
 	ll = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
 	lg = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
 	lll = log --color --graph --pretty=format:'%C(auto)%h %d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset%n' --abbrev-commit --stat
-	pu = "!f() { git push -u ${1:-origin} `git symbolic-ref --short HEAD`; }; f"
 [push]
 	default = simple
 [merge]
