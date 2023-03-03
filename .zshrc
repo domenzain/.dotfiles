@@ -36,6 +36,7 @@ fzf
 git
 git-extras
 gpg-agent
+nvm
 pass
 repo
 ripgrep
