@@ -62,6 +62,4 @@ GPG_TTY=$(tty)
 export GPG_TTY
 export SSH_AUTH_SOCK
 
-export PATH="$HOME/.cargo/bin:$PATH"
-
 export VIRTUALENVWRAPPER_PYTHON=$(which python3)
