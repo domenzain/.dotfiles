@@ -49,3 +49,11 @@
 	rebase = true
 [sumbodule]
 	stickyRecursiveClone = true
+[init]
+	defaultBranch = main
+[rebase]
+	autoStash = true
+[submodule]
+	stickyRecursiveClone = true
+	recurse = true
+	fetchJobs = 0
