@@ -632,6 +632,8 @@ before packages are loaded."
   (add-to-list 'auto-mode-alist '("\\.pyok\\'" . python-mode))
   (add-to-list 'auto-mode-alist '("\\.pyrun\\'" . python-mode))
   (add-to-list 'auto-mode-alist '("\\.pcfg\\'" . python-mode))
+
+  (add-to-list 'auto-mode-alist '("\\.gitlocal\\'" . gitconfig-mode))
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
