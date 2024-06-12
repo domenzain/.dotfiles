@@ -20,7 +20,7 @@ import XMonad.Hooks.SetWMName
 
 -- TODO: get $EDITOR and pass it on
 editor :: String
-editor = "/usr/bin/emacsclient -c"
+editor = "/snap/bin/emacsclient -c"
 
 rotateWS :: Bool -> X()
 rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) NonEmptyWS 1

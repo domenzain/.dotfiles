@@ -3,8 +3,8 @@ Description=Emacs: the extensible, self-documenting text editor
 Documentation=man:emacs(1) info:Emacs
 
 [Service]
-ExecStart=/bin/emacs --fg-daemon
-ExecStop=/bin/emacsclient --eval "(kill-emacs)"
+ExecStart=/snap/bin/emacs --fg-daemon
+ExecStop=/snap/bin/emacsclient --eval "(kill-emacs)"
 Environment=SSH_AUTH_SOCK=%t/keyring/ssh
 Restart=always
 TimeoutStartSec=0
