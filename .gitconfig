@@ -24,8 +24,6 @@
 	algorithm = patience
 [rerere]
 	enabled = true
-[include]
-	path = ~/.gitlocal
 [magithub]
 	online = false
 [magithub "status"]
@@ -50,3 +48,5 @@
 	required = true
 [advice]
 	skippedCherryPicks = false
+[include]
+	path = ~/.gitlocal
