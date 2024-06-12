@@ -32,11 +32,6 @@
 	includeStatusHeader = false
 	includePullRequestsSection = false
 	includeIssuesSection = false
-[filter "lfs"]
-	required = true
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
 [pull]
 	rebase = true
 [sumbodule]
@@ -49,3 +44,8 @@
 	stickyRecursiveClone = true
 	recurse = true
 	fetchJobs = 0
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
