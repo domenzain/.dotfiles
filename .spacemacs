@@ -43,6 +43,7 @@ This function should only modify configuration layer settings."
      d
      php
      octave
+     gpu
      html
      haskell
      yaml
