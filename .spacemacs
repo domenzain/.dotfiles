@@ -645,6 +645,21 @@ before packages are loaded."
                                  '((shell . t)
                                    (C . t)
                                    (python . t))))
+  (defvar-local my/flycheck-local-cache nil)
+
+  (defun my/flycheck-checker-get (fn checker property)
+    (or (alist-get property (alist-get checker my/flycheck-local-cache))
+        (funcall fn checker property)))
+
+  (advice-add 'flycheck-checker-get :around 'my/flycheck-checker-get)
+
+  (add-hook 'lsp-managed-mode-hook
+            (lambda ()
+              (when (derived-mode-p 'rust-mode)
+                (setq my/flycheck-local-cache '((lsp . ((next-checkers . (rust-clippy)))))))
+              (when (derived-mode-p 'c++-mode)
+                (setq my/flycheck-local-cache '((lsp . ((next-checkers . (c/c++-cppcheck)))))))
+               ))
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
