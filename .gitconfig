@@ -1,13 +1,5 @@
 [alias]
-	ci = commit
-	cia = commit --amend
-	co = checkout
-	cp = cherry-pick
-	d = difftool
-	m = mergetool
-	rb = rebase
 	st = status
-
 	rha = reset --hard
 
 	l = log --pretty=oneline --abbrev-commit
