@@ -76,7 +76,10 @@ This function should only modify configuration layer settings."
      lsp
      (auto-completion :variables
                       auto-completion-idle-delay 0.0
-                      auto-completion-minimum-prefix-length 1)
+                      auto-completion-minimum-prefix-length 1
+                      auto-completion-enable-snippets-in-popup t
+                      auto-completion-enable-help-tooltip t
+                      )
      spell-checking
      multiple-cursors
      (treemacs :variables treemacs-use-filewatch-mode t)
