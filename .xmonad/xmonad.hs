@@ -1,22 +1,15 @@
-import XMonad
-import XMonad.Actions.CycleWS
-import XMonad.Actions.PhysicalScreens
-import XMonad.Actions.Navigation2D
-import XMonad.Hooks.EwmhDesktops
-import XMonad.StackSet
-import XMonad.Util.WorkspaceCompare
-import XMonad.Prompt
-import XMonad.Prompt.Pass
-import XMonad.Layout
-import XMonad.Layout.Accordion
-import XMonad.Layout.Grid
-import System.Random
-import Graphics.X11.ExtraTypes.XF86
-import qualified Data.Map as M
-import System.Exit (exitSuccess )
--- required to fix Java swing Arduino IDE
-import XMonad.Hooks.SetWMName
-
+import qualified Data.Map                       as M
+import           Graphics.X11.ExtraTypes.XF86
+import           System.Exit                    (exitSuccess)
+import           XMonad
+import           XMonad.Actions.CycleWS
+import           XMonad.Actions.PhysicalScreens
+import           XMonad.Hooks.EwmhDesktops
+import           XMonad.Layout.Grid
+import           XMonad.Prompt
+import           XMonad.Prompt.Pass
+import           XMonad.StackSet
+import           XMonad.Util.WorkspaceCompare
 
 -- TODO: get $EDITOR and pass it on
 editor :: String
@@ -83,8 +76,9 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
   , ((configModMask .|. shiftMask, xK_period), sendMessage (IncMasterN (-1)))
 
   -- quit, or restart
-  , ((configModMask .|. shiftMask, xK_q     ), io exitSuccess)  -- %! Quit xmonad
-  , ((configModMask              , xK_q     ), spawn "if type xmonad; then xmonad --recompile && xmonad --restart; else xmessage xmonad not in \\$PATH: \"$PATH\"; fi") -- %! Restart xmonad
+  , ((configModMask .|. shiftMask, xK_q), io exitSuccess)  -- %! Quit xmonad
+  , ((configModMask              , xK_q),
+     spawn "if type xmonad; then xmonad --recompile && xmonad --restart; else xmessage xmonad not in \\$PATH: \"$PATH\"; fi") -- %! Restart xmonad
 
   , ((configModMask, xK_e), spawn editor)
   , ((configModMask, xK_f), spawn "firefox")
@@ -97,13 +91,10 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
   | (i, k) <- zip (XMonad.workspaces configDefault) [xK_1 .. xK_9]
   , (f, m) <- [(greedyView, 0), (shift, shiftMask)]
   ]
-  -- ++
-  -- [((m .|. configModMask, key), screenWorkspace sc >>= flip whenJust (windows . f))
-  -- | (key, sc) <- zip [xK_n, xK_t, xK_t] [0..]
-  -- , (f, m) <- [(view, 0), (shift, shiftMask)]
-  -- ]
 
-myLayout = Mirror tiled ||| Grid ||| Accordion ||| Full
+
+myLayout :: Choose Grid (Choose (Mirror Tall) (Choose Tall Full)) a
+myLayout = Grid ||| Mirror tiled ||| tiled ||| Full
     where
       tiled = Tall nmaster delta ratio
       nmaster = 1
@@ -112,13 +103,14 @@ myLayout = Mirror tiled ||| Grid ||| Accordion ||| Full
 
 main :: IO()
 main = do
-    xmonad $ ewmh $ def
-      { terminal    = "gnome-terminal"
-                    -- Borders
+  xmonad $ ewmh $ def
+    { terminal    = "gnome-terminal"
     , borderWidth = 2
     , normalBorderColor = "#cccccc"
     , focusedBorderColor = "#00ff00"
     , modMask = mod4Mask
     , keys = myKeys
     , layoutHook = myLayout
+    -- TODO: use ewmhFullscreen when stack upgrades xmonad-contrib
+    , handleEventHook = handleEventHook def <+> fullscreenEventHook
     }
