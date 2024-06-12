@@ -577,6 +577,10 @@ If you are unsure, try setting them in `dotspacemacs/user-config' first."
    git-enable-magit-svn-plugin t
    evil-search-module 'evil-search
    )
+  ; Use utf-8 for terminal
+  (defadvice ansi-term (after advise-ansi-term-coding-system)
+    (set-buffer-process-coding-system 'utf-8-unix 'utf-8-unix))
+  (ad-activate 'ansi-term)
   )
 
 (defun dotspacemacs/user-load ()
