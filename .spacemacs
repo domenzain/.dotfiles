@@ -27,12 +27,14 @@ This function should only modify configuration layer settings."
    dotspacemacs-ask-for-lazy-installation t
 
    ;; List of additional paths where to look for configuration layers.
-   ;; Paths must have a trailing slash (i.e. `~/.mycontribs/')
+   ;; Paths must have a trailing slash (i.e. "~/.mycontribs/")
    dotspacemacs-configuration-layer-path '()
 
    ;; List of configuration layers to load.
    dotspacemacs-configuration-layers
-   '(swift
+   '(clojure
+     windows-scripts
+     swift
      (rust :variables
            lsp-rust-server 'rust-analyzer
            cargo-process-reload-on-modify t
@@ -41,13 +43,15 @@ This function should only modify configuration layer settings."
      nginx
      ruby
      d
-     php
      octave
      gpu
      html
      haskell
      yaml
-     (c-c++ :variables c-c++-enable-clang-support t)
+     (c-c++ :variables
+            c-c++-backend 'lsp-clangd
+            c-c++-lsp-enable-semantic-highlight t
+            )
      cscope
      csharp
      cmake
@@ -56,14 +60,16 @@ This function should only modify configuration layer settings."
      emacs-lisp
      systemd
      markdown
-     org
+     (org :variables org-enable-reveal-js-support t)
      ;; Javascript, JSON
      javascript
      ;; R
      ess
      csv
+     sql
      latex
      protobuf
+     emacs-lisp
      (shell :variables
             shell-default-height 30
             shell-default-position 'top)
@@ -71,9 +77,10 @@ This function should only modify configuration layer settings."
      shell-scripts
      shell
      docker
-     semantic
      syntax-checking
      lsp
+     semantic
+     dap
      (auto-completion :variables
                       auto-completion-idle-delay 0.0
                       auto-completion-minimum-prefix-length 1
@@ -86,11 +93,13 @@ This function should only modify configuration layer settings."
      colors
      ;; neotree
      helm
+     ;; compleseus
      ;; ivy
      ;; Version control
-     git
-     github
+     (git :variables
+          git-enable-magit-todos-plugin t)
      version-control
+     copy-as-format
      )
 
    ;; List of additional packages that will be installed without being wrapped
@@ -102,6 +111,8 @@ This function should only modify configuration layer settings."
    ;; `:location' property: '(your-package :location "~/path/to/your-package/")
    ;; Also include the dependencies as they will not be resolved automatically.
    dotspacemacs-additional-packages '(
+                                      eglot
+                                      exec-path-from-shell
                                       wgrep
                                       )
 
@@ -128,9 +139,13 @@ It should only modify the values of Spacemacs settings."
   ;; This setq-default sexp is an exhaustive list of all the supported
   ;; spacemacs settings.
   (setq-default
-   ;; If non-nil then enable support for the portable dumper. You'll need
-   ;; to compile Emacs 27 from source following the instructions in file
+   ;; If non-nil then enable support for the portable dumper. You'll need to
+   ;; compile Emacs 27 from source following the instructions in file
    ;; EXPERIMENTAL.org at to root of the git repository.
+   ;;
+   ;; WARNING: pdumper does not work with Native Compilation, so it's disabled
+   ;; regardless of the following setting when native compilation is in effect.
+   ;;
    ;; (default nil)
    dotspacemacs-enable-emacs-pdumper nil
 
@@ -215,6 +230,13 @@ It should only modify the values of Spacemacs settings."
    ;; If the value is nil then no banner is displayed. (default 'official)
    dotspacemacs-startup-banner 'official
 
+   ;; Scale factor controls the scaling (size) of the startup banner. Default
+   ;; value is `auto' for scaling the logo automatically to fit all buffer
+   ;; contents, to a maximum of the full image height and a minimum of 3 line
+   ;; heights. If set to a number (int or float) it is used as a constant
+   ;; scaling factor for the default logo size.
+   dotspacemacs-startup-banner-scale 'auto
+
    ;; List of items to show in startup buffer or an association list of
    ;; the form `(list-type . list-size)`. If nil then it is disabled.
    ;; Possible values for list-type are:
@@ -225,10 +247,12 @@ It should only modify the values of Spacemacs settings."
    ;; pair of numbers, e.g. `(recents-by-project . (7 .  5))', where the first
    ;; number is the project limit and the second the limit on the recent files
    ;; within a project.
-   dotspacemacs-startup-lists '((agenda . 10)
+   dotspacemacs-startup-lists '(
+                                (agenda . 10)
                                 (recents . 5)
                                 (projects . 7)
-                                (todos . 10))
+                                (todos . 10)
+                                )
 
    ;; True if the home buffer should respond to resize events. (default t)
    dotspacemacs-startup-buffer-responsive t
@@ -238,6 +262,11 @@ It should only modify the values of Spacemacs settings."
 
    ;; The minimum delay in seconds between number key presses. (default 0.4)
    dotspacemacs-startup-buffer-multi-digit-delay 0.4
+
+   ;; If non-nil, show file icons for entries and headings on Spacemacs home buffer.
+   ;; This has no effect in terminal or if "all-the-icons" package or the font
+   ;; is not installed. (default nil)
+   dotspacemacs-startup-buffer-show-icons t
 
    ;; Default major mode for a new empty buffer. Possible values are mode
    ;; names such as `text-mode'; and `nil' to use Fundamental mode.
@@ -395,12 +424,12 @@ It should only modify the values of Spacemacs settings."
 
    ;; If non-nil the frame is maximized when Emacs starts up.
    ;; Takes effect only if `dotspacemacs-fullscreen-at-startup' is nil.
-   ;; (default nil) (Emacs 24.4+ only)
-   dotspacemacs-maximized-at-startup nil
+   ;; (default t) (Emacs 24.4+ only)
+   dotspacemacs-maximized-at-startup t
 
    ;; If non-nil the frame is undecorated when Emacs starts up. Combine this
-   ;; variable with `dotspacemacs-maximized-at-startup' in OSX to obtain
-   ;; borderless fullscreen. (default nil)
+   ;; variable with `dotspacemacs-maximized-at-startup' to obtain fullscreen
+   ;; without external boxes. Also disables the internal border. (default nil)
    dotspacemacs-undecorated-at-startup nil
 
    ;; A value from the range (0..100), in increasing opacity, which describes
@@ -412,6 +441,11 @@ It should only modify the values of Spacemacs settings."
    ;; the transparency level of a frame when it's inactive or deselected.
    ;; Transparency can be toggled through `toggle-transparency'. (default 90)
    dotspacemacs-inactive-transparency 90
+
+   ;; A value from the range (0..100), in increasing opacity, which describes the
+   ;; transparency level of a frame background when it's active or selected. Transparency
+   ;; can be toggled through `toggle-background-transparency'. (default 90)
+   dotspacemacs-background-transparency 90
 
    ;; If non-nil show the titles of transient states. (default t)
    dotspacemacs-show-transient-state-title t
@@ -451,7 +485,7 @@ It should only modify the values of Spacemacs settings."
    ;;   :size-limit-kb 1000)
    ;; When used in a plist, `visual' takes precedence over `relative'.
    ;; (default nil)
-   dotspacemacs-line-numbers '(:relative relative :size-limit-kb 1000)
+   dotspacemacs-line-numbers t
 
    ;; Code folding method. Possible values are `evil', `origami' and `vimish'.
    ;; (default 'evil)
@@ -522,7 +556,9 @@ It should only modify the values of Spacemacs settings."
    ;; (default nil - same as frame-title-format)
    dotspacemacs-icon-title-format nil
 
-   ;; Show trailing whitespace (default t)
+   ;; Color highlight trailing whitespace in all prog-mode and text-mode derived
+   ;; modes such as c++-mode, python-mode, emacs-lisp, html-mode, rst-mode etc.
+   ;; (default t)
    dotspacemacs-show-trailing-whitespace t
 
    ;; Delete whitespace while saving buffer. Possible values are `all'
@@ -571,7 +607,8 @@ This function defines the environment variables for your Emacs session. By
 default it calls `spacemacs/load-spacemacs-env' which loads the environment
 variables declared in `~/.spacemacs.env' or `~/.spacemacs.d/.spacemacs.env'.
 See the header of this file for more information."
-  (spacemacs/load-spacemacs-env))
+  (spacemacs/load-spacemacs-env)
+)
 
 (defun dotspacemacs/user-init ()
   "Initialization for user code:
@@ -602,7 +639,8 @@ If you are unsure, try setting them in `dotspacemacs/user-config' first."
 This function is called only while dumping Spacemacs configuration. You can
 `require' or `load' the libraries of your choice that will be included in the
 dump."
-  )
+)
+
 
 (defun dotspacemacs/user-config ()
   "Configuration for user code:
@@ -623,6 +661,11 @@ before packages are loaded."
                        forge-insert-assigned-pullreqs
                        forge-insert-requested-reviews))
       (magit-add-section-hook 'magit-status-sections-hook section 'forge-insert-pullreqs nil)))
+  ;; (consult-customize
+  ;;  consult-ripgrep consult-git-grep consult-grep
+  ;;  consult-bookmark consult-recent-file consult-xref
+  ;;  consult--source-recent-file consult--source-project-recent-file consult--source-bookmark
+  ;;  :preview-key (kbd "TAB"))
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
   ;; If Emacs is open, take over commit messages in the current project.
   (with-eval-after-load 'git-commit
@@ -639,6 +682,8 @@ before packages are loaded."
     (define-key helm-map (kbd "C-w") 'evil-delete-backward-word)
     )
 
+  (setq helm-ag-use-grep-ignore-list nil)
+
   (add-to-list 'auto-mode-alist '("\\.pybld\\'" . python-mode))
   (add-to-list 'auto-mode-alist '("\\.pyct\\'" . python-mode))
   (add-to-list 'auto-mode-alist '("\\.pyimg\\'" . python-mode))
@@ -654,6 +699,9 @@ before packages are loaded."
                                  '((shell . t)
                                    (C . t)
                                    (python . t))))
+  (require 'dap-lldb)
+  (setq dap-python-debugger 'debugpy)
+
   (defvar-local my/flycheck-local-cache nil)
 
   (defun my/flycheck-checker-get (fn checker property)
