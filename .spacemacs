@@ -609,6 +609,11 @@ before packages are loaded."
    magit-repository-directories '(("~/repos" . 4))
    magit-diff-refine-hunk 'all
    )
+  (with-eval-after-load 'magit
+    (dolist (section '(forge-insert-authored-pullreqs
+                       forge-insert-assigned-pullreqs
+                       forge-insert-requested-reviews))
+      (magit-add-section-hook 'magit-status-sections-hook section 'forge-insert-pullreqs nil)))
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
   ;; If Emacs is open, take over commit messages in the current project.
   (with-eval-after-load 'git-commit
