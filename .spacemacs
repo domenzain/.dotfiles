@@ -33,7 +33,10 @@ This function should only modify configuration layer settings."
    ;; List of configuration layers to load.
    dotspacemacs-configuration-layers
    '(swift
-     rust
+     (rust :variables
+           lsp-rust-server 'rust-analyzer
+           cargo-process-reload-on-modify t
+           rust-format-on-save t)
      sml
      nginx
      ruby
