@@ -639,6 +639,12 @@ before packages are loaded."
   (add-to-list 'auto-mode-alist '("\\.pcfg\\'" . python-mode))
 
   (add-to-list 'auto-mode-alist '("\\.gitlocal\\'" . gitconfig-mode))
+
+  (with-eval-after-load 'org
+    (org-babel-do-load-languages 'org-babel-load-languages
+                                 '((shell . t)
+                                   (C . t)
+                                   (python . t))))
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
