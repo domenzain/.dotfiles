@@ -2,3 +2,4 @@
 # default xrandr configuration, machine specific.
 MULTIHEAD=.xmonad/xmonad-multihead-defaults && test -f $MULTIHEAD && source $MULTIHEAD
 wmname LG3D
+eval $(gnome-keyring-daemon --start)
