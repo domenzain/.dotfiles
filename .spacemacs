@@ -577,6 +577,8 @@ If you are unsure, try setting them in `dotspacemacs/user-config' first."
    git-enable-magit-svn-plugin t
    evil-search-module 'evil-search
    )
+  (setenv "SSH_AUTH_SOCK" "/run/user/1000/keyring/ssh")
+
   ; Use utf-8 for terminal
   (defadvice ansi-term (after advise-ansi-term-coding-system)
     (set-buffer-process-coding-system 'utf-8-unix 'utf-8-unix))
