@@ -87,6 +87,7 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
   , ((configModMask              , xK_q     ), spawn "if type xmonad; then xmonad --recompile && xmonad --restart; else xmessage xmonad not in \\$PATH: \"$PATH\"; fi") -- %! Restart xmonad
 
   , ((configModMask, xK_e), spawn editor)
+  , ((configModMask, xK_f), spawn "firefox")
   , ((configModMask .|. shiftMask, xK_p), passPrompt $ def
                                      { position = CenteredAt (1/4) (2/3)
                                      , font = "xft:Source Code Pro-9"
