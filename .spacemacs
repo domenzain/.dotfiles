@@ -77,9 +77,6 @@ This function should only modify configuration layer settings."
      multiple-cursors
      (treemacs :variables treemacs-use-filewatch-mode t)
      colors
-     (mu4e :variables
-           mu4e-installation-path "/usr/local/share/emacs/site-lisp"
-           mu4e-enable-notifications t)
      ;; neotree
      helm
      ;; ivy
@@ -580,7 +577,6 @@ If you are unsure, try setting them in `dotspacemacs/user-config' first."
    git-enable-magit-svn-plugin t
    evil-search-module 'evil-search
    )
-  (add-to-list 'auto-mode-alist '("/tmp/mutt-" . mail-mode))
   )
 
 (defun dotspacemacs/user-load ()
@@ -619,79 +615,6 @@ before packages are loaded."
   (with-eval-after-load 'helm
     (define-key helm-map (kbd "C-w") 'evil-delete-backward-word)
     )
-  (with-eval-after-load 'mu4e
-  ;;; Set up some common mu4e variables
-    (setq-default
-     user-full-name "Luis Mario DOMENZAIN"
-     mu4e-context-policy 'pick-first
-     mu4e-maildir "~/.mail/mailbox"
-     mu4e-get-mail-command "mbsync --all"
-     mu4e-update-interval 30
-     mu4e-compose-signature-auto-include nil
-     mu4e-view-show-images t
-     mu4e-view-show-addresses t)
-    (setq mu4e-contexts
-          `( ,(make-mu4e-context
-               :name "work"
-               :enter-func (lambda () (mu4e-message "Switch to the work mu4e context"))
-               ;; leave-fun not defined
-               :match-func (lambda (msg)
-                             (when msg
-                               (or
-                                (string-match-p "^/work" (mu4e-message-field msg :maildir))
-                                (mu4e-message-contact-field-matches
-                                 msg
-                                 :to "luis.domenzan@parrot.com")
-                                (mu4e-message-contact-field-matches
-                                 msg
-                                 :to "ld@airinov.com"))))
-               :vars '((user-mail-address . "luis.domenzain@parrot.com")
-                       ;; let Outlook deal with sent messages directly
-                       (mu4e-sent-messages-behavior . sent)
-                       (mu4e-drafts-folder . "/work/drafts")
-                       (mu4e-trash-folder . "/work/trash")
-                       (mu4e-sent-folder . "/work/sent")))
-             ,(make-mu4e-context
-               :name "personal"
-               :enter-func (lambda () (mu4e-message "Switch to the personal mu4e context"))
-               ;; leave-func not defined
-               :match-func (lambda (msg)
-                             (when msg
-                               (or
-                                (string-match-p "^/personal" (mu4e-message-field msg :maildir))
-                                (mu4e-message-contact-field-matches
-                                 msg
-                                 :to "luismario.domenzain@gmail.com"))))
-               :vars '((user-mail-address . "luismario.domenzain@gmail.com")
-                       ;; let Gmail deal with sent messages directly
-                       (mu4e-sent-messages-behavior . delete)
-                       (mu4e-drafts-folder . "/personal/drafts")
-                       (mu4e-trash-folder . "/personal/trash")
-                       (mu4e-sent-folder . "/personal/sent")))))
-    ;; This sets `mu4e-user-mail-address-list' to the concatenation of all
-    ;; `user-mail-address' values for all contexts. If you have other mail
-    ;; addresses as well, you'll need to add those manually.
-    (setq mu4e-user-mail-address-list
-          (delq nil
-                (mapcar (lambda (context)
-                          (when (mu4e-context-vars context)
-                            (cdr (assq
-                                  'user-mail-address
-                                  (mu4e-context-vars context)))))
-                        mu4e-contexts)))
-    (setq mail-user-agent 'mu4e-user-agent
-          mml-secure-openpgp-encrypt-to-self t
-          mml-secure-openpgp-sign-with-sender t
-          mu4e-compose-crypto-reply-plain-policy nil
-          mu4e-compose-crypto-reply-encrypted-policy 'sign-and-encrypt)
-    (setq mu4e-maildir-shortcuts
-          '((:maildir "/work/inbox"     :key  ?i)
-            (:maildir "/work/sent"      :key  ?s)
-            (:maildir "/work/drafts"    :key  ?d)
-            (:maildir "/personal/inbox"     :key  ?I)
-            (:maildir "/personal/sent"      :key  ?S)
-            (:maildir "/personal/drafts"    :key  ?D)
-            )))
 
   )
 
