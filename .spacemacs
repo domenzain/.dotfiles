@@ -601,13 +601,13 @@ This function is called at the very end of Spacemacs startup, after layer
 configuration.
 Put your configuration code here, except for variables that should be set
 before packages are loaded."
-  ( setq-default
+  (setq-default
    ;; Home-row escape
    evil-escape-key-sequence "jk"
    evil-escape-unordered-key-sequence t
    evil-escape-delay 0.02
    magit-repository-directories '(("~/repos" . 4))
-   magit-diff-refine-hunk t
+   magit-diff-refine-hunk 'all
    )
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
   ;; If Emacs is open, take over commit messages in the current project.
