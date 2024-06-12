@@ -625,6 +625,13 @@ before packages are loaded."
     (define-key helm-map (kbd "C-w") 'evil-delete-backward-word)
     )
 
+  (add-to-list 'auto-mode-alist '("\\.pybld\\'" . python-mode))
+  (add-to-list 'auto-mode-alist '("\\.pyct\\'" . python-mode))
+  (add-to-list 'auto-mode-alist '("\\.pyimg\\'" . python-mode))
+  (add-to-list 'auto-mode-alist '("\\.pylist\\'" . python-mode))
+  (add-to-list 'auto-mode-alist '("\\.pyok\\'" . python-mode))
+  (add-to-list 'auto-mode-alist '("\\.pyrun\\'" . python-mode))
+  (add-to-list 'auto-mode-alist '("\\.pcfg\\'" . python-mode))
   )
 
 ;; Do not write anything past this comment. This is where Emacs will
