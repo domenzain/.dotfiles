@@ -34,8 +34,6 @@
 	includeIssuesSection = false
 [pull]
 	rebase = true
-[sumbodule]
-	stickyRecursiveClone = true
 [init]
 	defaultBranch = main
 [rebase]
