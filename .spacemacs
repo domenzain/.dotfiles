@@ -115,6 +115,8 @@ This function should only modify configuration layer settings."
                                       eglot
                                       exec-path-from-shell
                                       wgrep
+                                      treesit-auto
+                                      evil-textobj-tree-sitter
                                       )
 
    ;; A list of packages that cannot be updated.
@@ -679,7 +681,6 @@ before packages are loaded."
     (define-key helm-map (kbd "C-w") 'evil-delete-backward-word)
     )
 
-  (setq helm-ag-use-grep-ignore-list nil)
 
   (add-to-list 'auto-mode-alist '("\\.pybld\\'" . python-mode))
   (add-to-list 'auto-mode-alist '("\\.pyct\\'" . python-mode))
@@ -688,8 +689,65 @@ before packages are loaded."
   (add-to-list 'auto-mode-alist '("\\.pyok\\'" . python-mode))
   (add-to-list 'auto-mode-alist '("\\.pyrun\\'" . python-mode))
   (add-to-list 'auto-mode-alist '("\\.pcfg\\'" . python-mode))
-
   (add-to-list 'auto-mode-alist '("\\.gitlocal\\'" . gitconfig-mode))
+
+
+  (use-package treesit)
+  (use-package treesit-auto
+    :custom
+    (treesit-auto-install 'prompt)
+    :config
+    (setq my-cpp-treesit-auto-config
+
+          (make-treesit-auto-recipe
+           :lang 'cpp
+           :ts-mode 'c++-ts-mode
+           :remap 'c++-mode
+           :url "https://github.com/tree-sitter/tree-sitter-cpp"
+           :revision "v0.21.0"
+           :ext "\\.cpp\\'")
+          )
+    (add-to-list 'treesit-auto-recipe-list my-cpp-treesit-auto-config)
+    (setq my-rust-treesit-auto-config
+          (make-treesit-auto-recipe
+           :lang 'rust
+           :ts-mode 'rust-ts-mode
+           :remap 'rust-mode
+           :url "https://github.com/tree-sitter/tree-sitter-rust"
+           :revision "v0.21.2"
+           :ext "\\.rs\\'") )
+    (add-to-list 'treesit-auto-recipe-list my-rust-treesit-auto-config)
+
+    (setq my-lua-treesit-auto-config
+          (make-treesit-auto-recipe
+           :lang 'lua
+           :ts-mode 'lua-ts-mode
+           :remap 'lua-mode
+           :url "https://github.com/tree-sitter/tree-sitter-lua"
+           :revision "v0.21.2"
+           :ext "\\.lua\\'") )
+    (add-to-list 'treesit-auto-recipe-list my-lua-treesit-auto-config)
+    (treesit-auto-add-to-auto-mode-alist 'all)
+    (global-treesit-auto-mode))
+  (setq rust-ts-mode-hook rust-mode-hook)
+
+  (use-package evil-textobj-tree-sitter
+    :config
+    (define-key evil-outer-text-objects-map "f" (evil-textobj-tree-sitter-get-textobj "function.outer"))
+    (define-key evil-inner-text-objects-map "f" (evil-textobj-tree-sitter-get-textobj "function.inner"))
+    (define-key evil-outer-text-objects-map "c" (evil-textobj-tree-sitter-get-textobj "class.outer"))
+    (define-key evil-inner-text-objects-map "c" (evil-textobj-tree-sitter-get-textobj "class.inner"))
+    (define-key evil-outer-text-objects-map "l" (evil-textobj-tree-sitter-get-textobj "loop.outer"))
+    (define-key evil-inner-text-objects-map "l" (evil-textobj-tree-sitter-get-textobj "loop.inner"))
+    (define-key evil-outer-text-objects-map "a" (evil-textobj-tree-sitter-get-textobj "parameter.outer"))
+    (define-key evil-inner-text-objects-map "a" (evil-textobj-tree-sitter-get-textobj "parameter.inner"))
+    (define-key evil-outer-text-objects-map "i" (evil-textobj-tree-sitter-get-textobj "conditional.outer"))
+    (define-key evil-inner-text-objects-map "i" (evil-textobj-tree-sitter-get-textobj "conditional.inner"))
+    (define-key evil-outer-text-objects-map "=" (evil-textobj-tree-sitter-get-textobj "assignment.outer"))
+    (define-key evil-inner-text-objects-map "=" (evil-textobj-tree-sitter-get-textobj "assignment.inner"))
+    )
+
+  (setq helm-ag-use-grep-ignore-list nil)
 
   (with-eval-after-load 'org
     (org-babel-do-load-languages 'org-babel-load-languages
