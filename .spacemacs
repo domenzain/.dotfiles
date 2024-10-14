@@ -98,7 +98,7 @@ This function should only modify configuration layer settings."
      ;; ivy
      ;; Version control
      (git :variables
-          git-enable-magit-todos-plugin t)
+          git-enable-magit-todos-plugin nil)
      version-control
      copy-as-format
      )
@@ -657,11 +657,7 @@ before packages are loaded."
    magit-repository-directories '(("~/repos" . 4))
    magit-diff-refine-hunk 'all
    )
-  (with-eval-after-load 'magit
-    (dolist (section '(forge-insert-authored-pullreqs
-                       forge-insert-assigned-pullreqs
-                       forge-insert-requested-reviews))
-      (magit-add-section-hook 'magit-status-sections-hook section 'forge-insert-pullreqs nil)))
+
   ;; (consult-customize
   ;;  consult-ripgrep consult-git-grep consult-grep
   ;;  consult-bookmark consult-recent-file consult-xref
