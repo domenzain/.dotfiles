@@ -104,7 +104,7 @@ myLayout = Grid ||| Mirror tiled ||| tiled ||| Full
 main :: IO()
 main = do
   xmonad $ ewmh $ def
-    { terminal    = "gnome-terminal"
+    { terminal    = "wezterm-gui"
     , borderWidth = 2
     , normalBorderColor = "#cccccc"
     , focusedBorderColor = "#00ff00"

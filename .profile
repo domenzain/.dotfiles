@@ -16,6 +16,11 @@ if [ -n "$BASH_VERSION" ]; then
     fi
 fi
 
+# include wezterm integration if it exists
+if [ -f "$HOME/.config/wezterm/wezterm.sh" ]; then
+    . "$HOME/.config/wezterm/wezterm.sh"
+fi
+
 
 # PATH configuration...
 PATH="/usr/games:$PATH"

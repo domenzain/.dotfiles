@@ -32,7 +32,8 @@ This function should only modify configuration layer settings."
 
    ;; List of configuration layers to load.
    dotspacemacs-configuration-layers
-   '(clojure
+   '(lua
+     clojure
      windows-scripts
      swift
      (rust :variables
