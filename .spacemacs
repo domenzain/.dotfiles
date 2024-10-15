@@ -666,7 +666,7 @@ Put your configuration code here, except for variables that should be set
 before packages are loaded."
   (setq-default
    ;; Home-row escape
-   evil-escape-key-sequence "jk"
+   evil-escape-key-sequence "ae"
    evil-escape-unordered-key-sequence t
    evil-escape-delay 0.02
    magit-repository-directories '(("~/repos" . 4))
