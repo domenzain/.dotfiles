@@ -675,6 +675,10 @@ before packages are loaded."
    ;; Set the path for clang-format executable
    clang-format-executable "/usr/bin/clang-format-14"
 
+   ;; Flycheck
+   flycheck-checker-error-threshold nil
+
+   ;; LSP clangd settings
    )
 
   ;; (consult-customize
