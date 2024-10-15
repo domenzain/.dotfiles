@@ -671,6 +671,9 @@ before packages are loaded."
    evil-escape-delay 0.02
    magit-repository-directories '(("~/repos" . 4))
    magit-diff-refine-hunk 'all
+   ;; Set the path for clang-format executable
+   clang-format-executable "/usr/bin/clang-format-14"
+
    )
 
   ;; (consult-customize
