@@ -763,7 +763,7 @@ before packages are loaded."
     (define-key evil-outer-text-objects-map "=" (evil-textobj-tree-sitter-get-textobj "assignment.outer"))
     (define-key evil-inner-text-objects-map "=" (evil-textobj-tree-sitter-get-textobj "assignment.inner"))
     )
-
+  (setq treesit-max-buffer-size 4268435456)
   (setq helm-ag-use-grep-ignore-list nil)
 
   (with-eval-after-load 'org
