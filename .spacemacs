@@ -669,6 +669,7 @@ before packages are loaded."
    evil-escape-key-sequence "ae"
    evil-escape-unordered-key-sequence t
    evil-escape-delay 0.02
+   ;; Magit
    magit-repository-directories '(("~/repos" . 4))
    magit-diff-refine-hunk 'all
    ;; Set the path for clang-format executable
