@@ -778,14 +778,17 @@ before packages are loaded."
 
   (advice-add 'flycheck-checker-get :around 'my/flycheck-checker-get)
 
+  (add-hook 'c++-ts-mode-hook 'lsp-deferred)
+  (add-hook 'rust-ts-mode-hook 'lsp-deferred)
   (add-hook 'lsp-managed-mode-hook
             (lambda ()
-              (when (derived-mode-p 'rust-mode)
+              (when (derived-mode-p 'rust-ts-mode)
                 (setq my/flycheck-local-cache '((lsp . ((next-checkers . (rust-clippy)))))))
-              (when (derived-mode-p 'c++-mode)
+              (when (derived-mode-p 'c++-ts-mode)
                 (setq my/flycheck-local-cache '((lsp . ((next-checkers . (c/c++-cppcheck)))))))
-               ))
+              ))
   )
+
 
 ;; Do not write anything past this comment. This is where Emacs will
 ;; auto-generate custom variable definitions.
