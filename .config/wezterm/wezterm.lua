@@ -18,14 +18,14 @@ return {
 
   -- Links
   hyperlink_rules = (function()
-      local rules = wezterm.default_hyperlink_rules()
-      table.insert(rules, {
-                     -- Case-insensitive JIRA issue keys with -, space, or _ as separators
-                     regex = [[\b([A-Za-z]{2,5})[-_ ](\d+)]],
-                     -- Jira accepts wrong case, but needs a dash
-                     format = 'https://goproinc.atlassian.net/browse/$1-$2',
-      })
-      return rules
+    local rules = wezterm.default_hyperlink_rules()
+    table.insert(rules, {
+      -- Case-insensitive JIRA issue keys with -, space, or _ as separators
+      regex = [[\b([A-Za-z]{3,4})[-_ ](\d+)]],
+      -- Jira accepts wrong case, but needs a dash
+      format = 'https://goproinc.atlassian.net/browse/$1-$2',
+    })
+    return rules
   end)(),
 
   -- Input
