@@ -31,7 +31,7 @@ return {
   -- Input
   keys = {
     -- Keep readline undo
-    { key = "mapped:_", mods = "SHIFT|CTRL", action = wezterm.action.DisableDefaultAssignment },
+    { key = 'mapped:_', mods = 'SHIFT|CTRL', action = wezterm.action.DisableDefaultAssignment },
   },
   use_ime = true,
   alternate_buffer_wheel_scroll_speed = 1,
