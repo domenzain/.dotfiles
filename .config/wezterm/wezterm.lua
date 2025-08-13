@@ -38,7 +38,6 @@ return {
 
   -- Window manager
   tiling_desktop_environments = {
-  'X11 xmonad',
+    'X11 xmonad',
   },
-
 }
