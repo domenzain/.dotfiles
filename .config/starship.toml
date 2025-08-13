@@ -11,3 +11,14 @@ format = "@[$hostname]($style) "
 
 [username]
 format = "[$user]($style)"
+
+[[battery.display]]
+threshold = 80
+charging_symbol = '🔌 '
+discharging_symbol = '⚡ '
+style = ''
+
+[[battery.display]]
+threshold = 10
+style = 'bold red'
+discharging_symbol = '💀 '
