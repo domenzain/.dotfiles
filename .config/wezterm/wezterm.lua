@@ -8,9 +8,10 @@ return {
   enable_scroll_bar = true,
   enable_tab_bar = false,
   cursor_blink_rate = 400,
-  default_cursor_style = "BlinkingBlock",
-  cursor_blink_ease_in = "EaseOut",
-  cursor_blink_ease_out = "Constant",
+  default_cursor_style = 'BlinkingBlock',
+  cursor_blink_ease_in = 'EaseOut',
+  cursor_blink_ease_out = 'Constant',
+  window_background_opacity = 0.7,
 
   -- Contents
   scrollback_lines = 100000,
