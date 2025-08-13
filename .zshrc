@@ -9,7 +9,7 @@ ZSH=$HOME/.oh-my-zsh
 
 # Uncomment following line if you want to disable colors in ls
 # DISABLE_LS_COLORS="true"
-export TERM=xterm-256color
+#export TERM=xterm-256color
 
 # Uncomment following line if you want to disable autosetting terminal title.
 DISABLE_AUTO_TITLE="true"
