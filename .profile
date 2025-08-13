@@ -47,7 +47,9 @@ PATH="$HOME/perl5/bin:$PATH"
 PATH="/usr/local/bin:$PATH"
 PATH="/usr/local/go/bin:$PATH"
 PATH="$HOME/go/bin:$PATH"
-PATH="$HOME/.config/nvm/versions/node/v18.14.0/bin:$PATH"
+PATH="$HOME/.config/nvm/versions/node/v22.15.0/bin:$PATH"
+PATH="/usr/local/cuda/bin:$PATH"
+PATH="/ffmpeg/libavdevice:$PATH"
 export PATH=$PATH
 
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"
@@ -68,3 +70,4 @@ export GPG_TTY
 export SSH_AUTH_SOCK
 
 export VIRTUALENVWRAPPER_PYTHON=$(which python3)
+export VIRTUAL_ENV_DISABLE_PROMPT=1
