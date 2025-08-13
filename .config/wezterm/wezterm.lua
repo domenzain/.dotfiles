@@ -3,7 +3,7 @@ local wezterm = require 'wezterm'
 return {
   -- Appearance
   color_scheme = 'Modus-Vivendi',
-  font = wezterm.font 'Iosevka',
+  font = wezterm.font_with_fallback { 'Iosevka Custom', 'SauceCodePro Nerd Font' },
   font_size = 16,
   enable_scroll_bar = true,
   enable_tab_bar = false,
