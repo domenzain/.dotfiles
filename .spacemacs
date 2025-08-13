@@ -45,7 +45,7 @@ This function should only modify configuration layer settings."
      ruby
      d
      octave
-     gpu
+     ;;gpu
      html
      haskell
      yaml
@@ -71,12 +71,11 @@ This function should only modify configuration layer settings."
      latex
      protobuf
      emacs-lisp
+     ;; General
+     shell-scripts
      (shell :variables
             shell-default-height 30
             shell-default-position 'top)
-     ;; General
-     shell-scripts
-     shell
      docker
      syntax-checking
      lsp
@@ -93,14 +92,15 @@ This function should only modify configuration layer settings."
      (treemacs :variables treemacs-use-filewatch-mode t)
      colors
      ;; neotree
-     helm
-     ;; compleseus
+     ;; helm
+     compleseus
      ;; ivy
      ;; Version control
      (git :variables
           git-enable-magit-todos-plugin nil)
      version-control
      copy-as-format
+     github-copilot
      )
 
    ;; List of additional packages that will be installed without being wrapped
@@ -307,7 +307,7 @@ It should only modify the values of Spacemacs settings."
    ;; refer to the DOCUMENTATION.org for more info on how to create your own
    ;; spaceline theme. Value can be a symbol or list with additional properties.
    ;; (default '(spacemacs :separator wave :separator-scale 1.5))
-   dotspacemacs-mode-line-theme '(doom)
+   dotspacemacs-mode-line-theme '(spacemacs)
 
    ;; If non-nil the cursor color matches the state color in GUI Emacs.
    ;; (default t)
@@ -318,10 +318,11 @@ It should only modify the values of Spacemacs settings."
    ;; fixed-pitch faces. The `:size' can be specified as
    ;; a non-negative integer (pixel size), or a floating-point (point size).
    ;; Point size is recommended, because it's device independent. (default 10.0)
-   dotspacemacs-default-font '("Iosevka"
-                               :size 32
-                               :weight normal
-                               :width normal)
+
+   dotspacemacs-default-font '(("Iosevka Custom"
+                                :size 32
+                                :weight normal
+                                :width normal))
 
    ;; The leader key (default "SPC")
    dotspacemacs-leader-key "SPC"
@@ -414,6 +415,17 @@ It should only modify the values of Spacemacs settings."
    ;; are kept or minimized by `spacemacs/toggle-maximize-window' (SPC w m).
    ;; (default t)
    dotspacemacs-maximize-window-keep-side-windows t
+
+   ;; If nil, no load-hints enabled. If t, enable the `load-hints' which will
+   ;; put the most likely path on the top of `load-path' to reduce walking
+   ;; through the whole `load-path'. It's an experimental feature to speedup
+   ;; Spacemacs on Windows. Refer the FAQ.org "load-hints" session for details.
+   dotspacemacs-enable-load-hints nil
+
+   ;; If t, enable the `package-quickstart' feature to avoid full package
+   ;; loading, otherwise no `package-quickstart' attemption (default nil).
+   ;; Refer the FAQ.org "package-quickstart" section for details.
+   dotspacemacs-enable-package-quickstart nil
 
    ;; If non-nil a progress bar is displayed when spacemacs is loading. This
    ;; may increase the boot time on some systems and emacs builds, set it to
@@ -624,7 +636,7 @@ default it calls `spacemacs/load-spacemacs-env' which loads the environment
 variables declared in `~/.spacemacs.env' or `~/.spacemacs.d/.spacemacs.env'.
 See the header of this file for more information."
   (spacemacs/load-spacemacs-env)
-)
+  )
 
 (defun dotspacemacs/user-init ()
   "Initialization for user code:
@@ -636,26 +648,28 @@ If you are unsure, try setting them in `dotspacemacs/user-config' first."
         '(("melpa" . "elpa.zilongshanren.com/melpa/")
           ("org" . "elpa.zilongshanren.com/org/")
           ("gnu" . "elpa.zilongshanren.com/gnu/"))
-   )
+        )
   (setq-default
    git-magit-status-fullscreen t
    git-enable-magit-svn-plugin t
    evil-search-module 'evil-search
    )
+
   (setenv "SSH_AUTH_SOCK" "/run/user/1000/keyring/ssh")
 
-  ; Use utf-8 for terminal
+                                        ; Use utf-8 for terminal
   (defadvice ansi-term (after advise-ansi-term-coding-system)
     (set-buffer-process-coding-system 'utf-8-unix 'utf-8-unix))
   (ad-activate 'ansi-term)
   )
+
 
 (defun dotspacemacs/user-load ()
   "Library to load while dumping.
 This function is called only while dumping Spacemacs configuration. You can
 `require' or `load' the libraries of your choice that will be included in the
 dump."
-)
+  )
 
 
 (defun dotspacemacs/user-config ()
@@ -664,6 +678,11 @@ This function is called at the very end of Spacemacs startup, after layer
 configuration.
 Put your configuration code here, except for variables that should be set
 before packages are loaded."
+  ;; Add SauceCodePro Nerd Font as the first fallback
+  (set-fontset-font "fontset-default" nil "SauceCodePro Nerd Font" nil 'prepend)
+  ;; Set Iosevka Custom as the primary font for all characters
+  (set-fontset-font "fontset-default" nil "Iosevka Custom" nil 'prepend)
+
   (setq-default
    ;; Home-row escape
    evil-escape-key-sequence "ae"
@@ -673,14 +692,14 @@ before packages are loaded."
    magit-repository-directories '(("~/repos" . 4))
    magit-diff-refine-hunk 'all
    ;; Set the path for clang-format executable
-   clang-format-executable "/usr/bin/clang-format-14"
+   clang-format-executable "/usr/bin/clang-format-20"
 
    ;; Flycheck
    flycheck-checker-error-threshold nil
 
    ;; LSP clangd settings
-   lsp-clangd-binary-path "/usr/bin/clangd-20"
-   lsp-clients-clangd-args '("--header-insertion-decorators=0" "--query-driver=/home/domenzain/repos/**/aarch64-gp2-*")
+   lsp-clangd-binary-path "/usr/bin/clangd-21"
+   lsp-clients-clangd-args '("--header-insertion-decorators=0" "--query-driver=/home/domenzain/repos/**/aarch64-gp2-*,/home/ldomenzain/repos/**/aarch64-gp2-*")
    )
 
   ;; (consult-customize
@@ -691,18 +710,56 @@ before packages are loaded."
   (define-key evil-normal-state-map (kbd "Q") 'evil-fill-and-move)
   ;; If Emacs is open, take over commit messages in the current project.
   (with-eval-after-load 'git-commit
-   (global-git-commit-mode t)
-   )
+    (global-git-commit-mode t)
+    )
   ;; Do not highlight current line by default.
   (global-hl-line-mode -1)
 
   ;; Make sure C-w kills a word in every text editing context
   (with-eval-after-load 'company
     (define-key company-active-map (kbd "C-w") 'evil-delete-backward-word)
+    ;; ;; disable inline previews
+    ;; (delq 'company-preview-if-just-one-frontend company-frontends)
     )
+
   (with-eval-after-load 'helm
     (define-key helm-map (kbd "C-w") 'evil-delete-backward-word)
     )
+
+  (with-eval-after-load 'tramp
+    (add-to-list
+     'tramp-methods
+     '("slarm"
+       (tramp-remote-shell "/usr/bin/zsh")
+       (tramp-remote-shell-args ("-i"))
+       (tramp-login-program "ssh")
+       (tramp-login-args (("-l" "%u")
+                          ("-p" "%p")
+                          ("-t" "-t")
+                          ("-o" "ServerAliveInterval=100")
+                          ("-o" "RemoteCommand=\"~/slurm-allocate.sh arm-development armv8 4 2G\"")
+                          ("-q")
+                          ("%h")))))
+    (add-to-list
+     'tramp-methods
+     '("slurm"
+       (tramp-remote-shell "/usr/bin/zsh")
+       (tramp-remote-shell-args ("-i"))
+       (tramp-login-program "ssh")
+       (tramp-login-args (("-l" "%u")
+                          ("-p" "%p")
+                          ("-t" "-t")
+                          ("-o" "ServerAliveInterval=100")
+                          ("-o" "RemoteCommand=\"~/slurm-allocate.sh development std 32 64G\"")
+                          ("-q")
+                          ("%h")))))
+    (connection-local-set-profile-variables
+     'clangd-for-tramp
+     '((lsp-clangd-binary-path . "/usr/bin/clangd-20")))   ; path as *seen by the remote host*
+
+    (connection-local-set-profiles
+     '(:application tramp)
+     'clangd-for-tramp))
 
 
   (add-to-list 'auto-mode-alist '("\\.pybld\\'" . python-mode))
@@ -731,6 +788,17 @@ before packages are loaded."
            :ext "\\.cpp\\'")
           )
     (add-to-list 'treesit-auto-recipe-list my-cpp-treesit-auto-config)
+
+    (setq my-c-treesit-auto-config
+          (make-treesit-auto-recipe
+           :lang 'c
+           :ts-mode 'c-ts-mode
+           :remap 'c-mode
+           :url "https://github.com/tree-sitter/tree-sitter-c"
+           :revision "v0.23.2"
+           :ext "\\.c\\'")
+          )
+    (add-to-list 'treesit-auto-recipe-list my-c-treesit-auto-config)
     (setq my-rust-treesit-auto-config
           (make-treesit-auto-recipe
            :lang 'rust
@@ -750,9 +818,8 @@ before packages are loaded."
            :revision "v0.21.2"
            :ext "\\.lua\\'") )
     (add-to-list 'treesit-auto-recipe-list my-lua-treesit-auto-config)
-    (treesit-auto-add-to-auto-mode-alist 'all)
+    (treesit-auto-add-to-auto-mode-alist)
     (global-treesit-auto-mode))
-  (setq rust-ts-mode-hook rust-mode-hook)
 
   (use-package evil-textobj-tree-sitter
     :config
@@ -794,11 +861,102 @@ before packages are loaded."
             (lambda ()
               (when (derived-mode-p 'rust-ts-mode)
                 (setq my/flycheck-local-cache '((lsp . ((next-checkers . (rust-clippy)))))))
-              (when (derived-mode-p 'c++-ts-mode)
-                (setq my/flycheck-local-cache '((lsp . ((next-checkers . (c/c++-cppcheck)))))))
+              ;; (when (derived-mode-p 'c++-ts-mode)
+              ;;   (setq my/flycheck-local-cache '((lsp . ((next-checkers . (c/c++-cppcheck)))))))
               ))
   )
 
 
-;; Do not write anything past this comment. This is where Emacs will
-;; auto-generate custom variable definitions.
+(defun dotspacemacs/emacs-custom-settings ()
+  "Emacs custom settings.
+This is an auto-generated function, do not modify its content directly, use
+Emacs customize menu instead.
+This function is called at the very end of Spacemacs initialization."
+  (custom-set-variables
+   ;; custom-set-variables was added by Custom.
+   ;; If you edit it by hand, you could mess it up, so be careful.
+   ;; Your init file should contain only one such instance.
+   ;; If there is more than one, they won't work right.
+   '(lsp-clangd-binary-path "/usr/bin/clangd-22")
+   '(package-selected-packages
+     '(embark-consult consult-lsp consult-yasnippet embark flyspell-correct-popup
+                      marginalia orderless zenburn-theme yasnippet-snippets
+                      yapfify yaml-mode ws-butler writeroom-mode winum which-key
+                      wgrep web-mode web-beautify vundo volatile-highlights
+                      vim-powerline vi-tilde-fringe undo-fu-session undo-fu
+                      treesit-auto treemacs-projectile treemacs-persp
+                      treemacs-magit treemacs-icons-dired treemacs-evil toml-mode
+                      toc-org terminal-here term-cursor tagedit systemd symon
+                      symbol-overlay swift-mode string-inflection
+                      string-edit-at-point srefactor sql-indent sphinx-doc
+                      spacemacs-whitespace-cleanup spacemacs-purpose-popwin
+                      spaceline space-doc solarized-theme smeargle slim-mode shfmt
+                      shell-pop seeing-is-believing scss-mode sass-mode rvm rustic
+                      ruby-tools ruby-test-mode ruby-refactor ruby-hash-syntax
+                      rubocopfmt rubocop rspec-mode ron-mode robe restart-emacs
+                      realgud rbenv rake rainbow-mode rainbow-identifiers
+                      rainbow-delimiters quickrun pytest pylookup pyenv-mode pydoc
+                      py-isort pug-mode protobuf-mode prettier-js powershell
+                      poetry pippel pipenv pip-requirements password-generator
+                      paradox overseer orgit-forge org-superstar org-rich-yank
+                      org-re-reveal org-projectile org-present org-pomodoro
+                      org-mime org-download org-contrib org-cliplink opencl-c-mode
+                      open-junk-file omnisharp ob-sml nyan-mode npm-mode
+                      nodejs-repl nginx-mode nameless multi-vterm multi-term
+                      multi-line monokai-theme molokai-theme minitest markdown-toc
+                      magit-svn macrostep lsp-ui lsp-sourcekit lsp-pyright
+                      lsp-origami lsp-latex lsp-haskell lorem-ipsum livid-mode
+                      live-py-mode link-hint json-reformat json-navigator
+                      json-mode js2-refactor js-doc journalctl-mode inspector
+                      insert-shebang info+ indent-guide importmagic impatient-mode
+                      hybrid-mode hungry-delete holy-mode hlint-refactor hl-todo
+                      hindent highlight-parentheses highlight-numbers
+                      highlight-indentation hide-comnt helm-xref helm-themes
+                      helm-swoop helm-rtags helm-pydoc helm-purpose
+                      helm-projectile helm-org-rifle helm-org helm-mode-manager
+                      helm-make helm-lsp helm-hoogle helm-git-grep helm-descbinds
+                      helm-ctest helm-css-scss helm-cscope helm-company
+                      helm-comint helm-cider helm-c-yasnippet helm-ag
+                      haskell-snippets google-translate google-c-style
+                      golden-ratio gnuplot glsl-mode gitignore-templates
+                      git-timemachine git-modes git-messenger git-link gh-md
+                      gendoxy flyspell-correct-helm flycheck-ycmd flycheck-rtags
+                      flycheck-pos-tip flycheck-package flycheck-haskell
+                      flycheck-elsa flycheck-bashate flx-ido fish-mode
+                      fancy-battery eyebrowse expand-region exec-path-from-shell
+                      evil-visualstar evil-visual-mark-mode evil-unimpaired
+                      evil-tutor evil-textobj-tree-sitter evil-textobj-line
+                      evil-tex evil-surround evil-org evil-numbers
+                      evil-nerd-commenter evil-mc evil-matchit evil-lisp-state
+                      evil-lion evil-indent-plus evil-iedit-state evil-goggles
+                      evil-exchange evil-evilified-state evil-escape
+                      evil-easymotion evil-collection evil-cleverparens evil-args
+                      evil-anzu ess-R-data-view eshell-z eshell-prompt-extras
+                      esh-help emr emmet-mode elisp-slime-nav elisp-demos
+                      elisp-def editorconfig eat dumb-jump drag-stuff dotenv-mode
+                      doom-modeline dockerfile-mode docker disaster disable-mouse
+                      dired-quick-sort diminish diff-hl devdocs define-word
+                      dap-mode dante d-mode cython-mode cuda-mode csv-mode
+                      cpp-auto-include copy-as-format company-ycmd company-web
+                      company-shell company-rtags company-reftex company-quickhelp
+                      company-math company-lua company-dcd company-cabal
+                      company-c-headers company-auctex company-anaconda
+                      column-enforce-mode color-identifiers-mode code-review
+                      code-cells cmm-mode cmake-mode clojure-snippets
+                      clean-aindent-mode cider-eval-sexp-fu chruby
+                      challenger-deep-theme centered-cursor-mode ccls bundler
+                      browse-at-remote bmx-mode blacken auto-yasnippet
+                      auto-highlight-symbol auto-dictionary auto-compile attrap
+                      all-the-icons aggressive-indent ace-link ace-jump-helm-line))
+   '(safe-local-variable-values
+     '((eval add-hook 'before-save-hook #'clang-format-buffer nil t)
+       (javascript-backend . tide) (javascript-backend . tern)
+       (javascript-backend . lsp)))
+   '(spacemacs-keep-legacy-current-buffer-delete-bindings nil))
+  (custom-set-faces
+   ;; custom-set-faces was added by Custom.
+   ;; If you edit it by hand, you could mess it up, so be careful.
+   ;; Your init file should contain only one such instance.
+   ;; If there is more than one, they won't work right.
+   )
+  )
