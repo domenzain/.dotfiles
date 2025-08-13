@@ -10,10 +10,12 @@ import           XMonad.Prompt
 import           XMonad.Prompt.Pass
 import           XMonad.StackSet
 import           XMonad.Util.WorkspaceCompare
+import           XMonad.Util.Run
 
 -- TODO: get $EDITOR and pass it on
 editor :: String
 editor = "/snap/bin/emacsclient -c"
+alt_editor = "/home/domenzain/.cargo/bin/neovide"
 
 rotateWS :: Bool -> X()
 rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) NonEmptyWS 1
@@ -81,6 +83,7 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
      spawn "if type xmonad; then xmonad --recompile && xmonad --restart; else xmessage xmonad not in \\$PATH: \"$PATH\"; fi") -- %! Restart xmonad
 
   , ((configModMask, xK_e), spawn editor)
+  , ((configModMask, xK_n), spawn alt_editor)
   , ((configModMask, xK_f), spawn "firefox")
   , ((configModMask .|. shiftMask, xK_p), passPrompt $ def
                                      { position = CenteredAt (1/4) (2/3)
