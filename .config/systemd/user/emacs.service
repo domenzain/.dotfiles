@@ -4,9 +4,11 @@ Documentation=man:emacs(1) info:Emacs
 
 [Service]
 ExecStart=/snap/bin/emacs --fg-daemon
-ExecStop=/snap/bin/emacsclient --eval "(kill-emacs)"
-Environment=SSH_AUTH_SOCK=%t/keyring/ssh
+Environment=SSH_AUTH_SOCK=%t/keyring/ssh;SHELL=zsh
+StandardOutput=journal+console
+StandardError=journal+console
 Restart=always
+Type=simple
 TimeoutStartSec=0
 
 [Install]
