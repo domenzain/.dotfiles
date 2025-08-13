@@ -103,6 +103,8 @@ myLayout = Grid ||| Mirror tiled ||| tiled ||| Full
 
 main :: IO()
 main = do
+  xmproc <- spawnPipe "picom"
+  xmproc <- spawn "feh --bg-fill --randomize Pictures/Paintings/"
   xmonad $ ewmh $ def
     { terminal    = "wezterm-gui"
     , borderWidth = 2
