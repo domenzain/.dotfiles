@@ -289,16 +289,9 @@ It should only modify the values of Spacemacs settings."
    dotspacemacs-themes '(
                          modus-vivendi
                          modus-operandi
-                         molokai
-                         monokai
-                         misterioso
                          spacemacs-dark
                          spacemacs-light
-                         solarized-light
-                         solarized-dark
-                         leuven
-                         zenburn
-                         challenger-deep)
+                         )
 
    ;; Set the theme for the Spaceline. Supported themes are `spacemacs',
    ;; `all-the-icons', `custom', `doom', `vim-powerline' and `vanilla'. The
