@@ -65,8 +65,7 @@ export ARDUINO_PATH=/usr/local/arduino
 export KALEIDOSCOPE_DIR="$HOME/repos/tools/kaleidoscope"
 export FZF_BASE="$HOME/repos/tools/fzf"
 
-GPG_TTY=$(tty)
-export GPG_TTY
+export GPG_TTY=$(tty)
 export SSH_AUTH_SOCK
 
 export VIRTUALENVWRAPPER_PYTHON=$(which python3)
