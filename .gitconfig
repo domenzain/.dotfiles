@@ -1,5 +1,6 @@
 [alias]
 	st = status
+	co = checkout
 	rha = reset --hard
 
 	l = log --pretty=oneline --abbrev-commit
