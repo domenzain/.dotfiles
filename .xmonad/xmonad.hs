@@ -13,12 +13,11 @@ import           XMonad.Util.WorkspaceCompare
 import           XMonad.Util.Run
 
 -- TODO: get $EDITOR and pass it on
-editor :: String
-editor = "/snap/bin/emacsclient -c"
-alt_editor = "/home/domenzain/.cargo/bin/neovide"
+
+
 
 rotateWS :: Bool -> X()
-rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) NonEmptyWS 1
+rotateWS b  = do t <- findWorkspace getSortByIndex (bToDir b) (Not emptyWS) 1
                  windows . greedyView $ t
   where bToDir True  = Next
         bToDir False = Prev
@@ -31,10 +30,10 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
     -- Media buttons
   , ((0, xF86XK_MonBrightnessUp  ), spawn "light -A 5")
   , ((0, xF86XK_MonBrightnessDown), spawn "light -U 5")
-  , ((0, xF86XK_AudioLowerVolume ), spawn "amixer -D pulse -- sset Master unmute 5%-")
-  , ((0, xF86XK_AudioRaiseVolume ), spawn "amixer -D pulse -- sset Master unmute 5%+")
-  , ((0, xF86XK_AudioMute        ), spawn "amixer -D pulse -- sset Master toggle")
-  , ((0, xF86XK_AudioMicMute     ), spawn "amixer -D pulse -- sset Capture toggle")
+  , ((0, xF86XK_AudioLowerVolume), spawn "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-")
+  , ((0, xF86XK_AudioRaiseVolume), spawn "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+")
+  , ((0, xF86XK_AudioMute),        spawn "wpctl set-mute   @DEFAULT_AUDIO_SINK@ toggle")
+  , ((0, xF86XK_AudioMicMute),     spawn "wpctl set-mute   @DEFAULT_AUDIO_SOURCE@ toggle")
     -- Displays
   , ((configModMask, xK_Left), onPrevNeighbour verticalScreenOrderer view)
   , ((configModMask, xK_Right), onNextNeighbour verticalScreenOrderer view)
@@ -82,8 +81,8 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
   , ((configModMask              , xK_q),
      spawn "if type xmonad; then xmonad --recompile && xmonad --restart; else xmessage xmonad not in \\$PATH: \"$PATH\"; fi") -- %! Restart xmonad
 
-  , ((configModMask, xK_e), spawn editor)
-  , ((configModMask, xK_n), spawn alt_editor)
+  , ((configModMask, xK_e), spawn "/snap/bin/emacsclient -c")
+  , ((configModMask, xK_n), spawn "/home/domenzain/.cargo/bin/neovide")
   , ((configModMask, xK_f), spawn "firefox")
   , ((configModMask .|. shiftMask, xK_p), passPrompt $ def
                                      { position = CenteredAt (1/4) (2/3)
@@ -108,7 +107,7 @@ main :: IO()
 main = do
   xmproc <- spawnPipe "picom"
   xmproc <- spawn "feh --bg-fill --randomize Pictures/Paintings/"
-  xmonad $ ewmh $ def
+  xmonad $ ewmhFullscreen . ewmh $ def
     { terminal    = "wezterm-gui"
     , borderWidth = 2
     , normalBorderColor = "#cccccc"
@@ -116,6 +115,4 @@ main = do
     , modMask = mod4Mask
     , keys = myKeys
     , layoutHook = myLayout
-    -- TODO: use ewmhFullscreen when stack upgrades xmonad-contrib
-    , handleEventHook = handleEventHook def <+> fullscreenEventHook
     }
