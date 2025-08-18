@@ -696,7 +696,7 @@ before packages are loaded."
    flycheck-checker-error-threshold nil
 
    ;; LSP clangd settings
-   lsp-clangd-binary-path "/usr/bin/clangd-21"
+   lsp-clangd-binary-path "/usr/bin/clangd-22"
    lsp-clients-clangd-args '("--header-insertion-decorators=0" "--query-driver=/home/domenzain/repos/**/aarch64-gp2-*,/home/ldomenzain/repos/**/aarch64-gp2-*")
    )
 
