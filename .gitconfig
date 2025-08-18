@@ -51,19 +51,3 @@
 	skippedCherryPicks = false
 [include]
 	path = ~/.gitlocal
-[gpg]
-	format = ssh
-[user]
-	signingkey = /home/domenzain/.ssh/id_ed25519.pub
-[tag]
-	gpgsign = true
-[commit]
-	gpgsign = true
-[gpg "ssh"]
-	allowedSignersFile = /home/domenzain/.ssh/allowed_signers
-[scalar]
-	repo = /home/domenzain/repos/camfw
-	repo = /home/domenzain/repos/isg
-	repo = /home/domenzain/repos/tools/llvm-project
-[maintenance]
-	repo = /home/domenzain/repos/tools/llvm-project
