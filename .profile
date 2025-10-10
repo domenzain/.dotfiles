@@ -50,6 +50,9 @@ PATH="$HOME/go/bin:$PATH"
 PATH="$HOME/.config/nvm/versions/node/v22.18.0/bin:$PATH"
 PATH="/usr/local/cuda/bin:$PATH"
 PATH="/ffmpeg/libavdevice:$PATH"
+PATH="/usr/local/opt/gnupg@2.2/bin:$PATH"
+PATH="/usr/local/opt/ruby/bin:$PATH"
+PATH="$HOME/.gem/ruby/3.0.0/bin:$PATH"
 export PATH=$PATH
 
 PERL5LIB="$HOME/perl5/lib/perl5${PERL5LIB:+:${PERL5LIB}}"
