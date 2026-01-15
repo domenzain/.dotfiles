@@ -84,7 +84,7 @@ This function should only modify configuration layer settings."
             shell-default-position 'top)
      docker
      syntax-checking
-     lsp
+     (lsp :variables lsp-lens-enable t)
      semantic
      dap
      (auto-completion :variables
