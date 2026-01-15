@@ -95,6 +95,7 @@ This function should only modify configuration layer settings."
                       )
      spell-checking
      multiple-cursors
+     whisper
      (treemacs :variables treemacs-use-filewatch-mode t)
      colors
      ;; neotree
