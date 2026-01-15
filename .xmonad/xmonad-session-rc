@@ -6,5 +6,35 @@ systemctl --user import-environment PATH DISPLAY XAUTHORITY
 
 # default xrandr configuration, machine specific.
 MULTIHEAD=.xmonad/xmonad-multihead-defaults && test -f $MULTIHEAD && source $MULTIHEAD
+# Apply /etc/default/keyboard to X
+apply_xkb_from_default() {
+  local f=/etc/default/keyboard
+  [ -r "$f" ] || return 0
+  # shellcheck disable=SC1091
+  . "$f"  # brings in XKBMODEL, XKBLAYOUT, XKBVARIANT, XKBOPTIONS, BACKSPACE
+
+  # Build args only for non-empty fields
+  local args=()
+  [ -n "${XKBMODEL:-}"   ] && args+=( -model "$XKBMODEL" )
+  [ -n "${XKBLAYOUT:-}"  ] && args+=( -layout "$XKBLAYOUT" )
+  [ -n "${XKBVARIANT:-}" ] && args+=( -variant "$XKBVARIANT" )
+
+  # Normalize options: spaces → commas; clear previous options first
+  local opts="${XKBOPTIONS:-}"
+  opts="${opts// /,}"
+  if [ -n "$opts" ]; then
+    args+=( -option '' -option "$opts" )
+  else
+    args+=( -option '' )
+  fi
+
+  # BACKSPACE from /etc/default/keyboard maps to XKB "backspace:*" option
+  [ -n "${BACKSPACE:-}" ] && args+=( -option "backspace:${BACKSPACE}" )
+
+  setxkbmap "${args[@]}"
+}
+
+apply_xkb_from_default
+
 wmname LG3D
 eval $(gnome-keyring-daemon --start)
