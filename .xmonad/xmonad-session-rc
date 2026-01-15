@@ -1,4 +1,9 @@
-/usr/bin/ibus-daemon -xr &
+[ -f "$HOME/.profile" ] && . "$HOME/.profile"
+export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+#  for systemd user services launched later
+systemctl --user import-environment PATH DISPLAY XAUTHORITY
+
 # default xrandr configuration, machine specific.
 MULTIHEAD=.xmonad/xmonad-multihead-defaults && test -f $MULTIHEAD && source $MULTIHEAD
 wmname LG3D
