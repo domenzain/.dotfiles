@@ -124,6 +124,8 @@ This function should only modify configuration layer settings."
                                       wgrep
                                       treesit-auto
                                       evil-textobj-tree-sitter
+                                      ultra-scroll
+                                      boogie-friends
                                       )
 
    ;; A list of packages that cannot be updated.
