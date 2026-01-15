@@ -853,6 +853,7 @@ before packages are loaded."
 
   (add-hook 'c++-ts-mode-hook 'lsp-deferred)
   (add-hook 'rust-ts-mode-hook 'lsp-deferred)
+  (add-hook 'python-ts-mode-hook 'lsp-deferred)
   (add-hook 'lsp-managed-mode-hook
             (lambda ()
               (when (derived-mode-p 'rust-ts-mode)
