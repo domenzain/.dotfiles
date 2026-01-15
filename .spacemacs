@@ -861,6 +861,7 @@ before packages are loaded."
               ;; (when (derived-mode-p 'c++-ts-mode)
               ;;   (setq my/flycheck-local-cache '((lsp . ((next-checkers . (c/c++-cppcheck)))))))
               ))
+  (require 'exec-path-from-shell)
   )
 
 
