@@ -30,10 +30,16 @@ myKeys configDefault@XConfig {XMonad.modMask = configModMask} = M.fromList $
     -- Media buttons
   , ((0, xF86XK_MonBrightnessUp  ), spawn "light -A 5")
   , ((0, xF86XK_MonBrightnessDown), spawn "light -U 5")
-  , ((0, xF86XK_AudioLowerVolume), spawn "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-")
-  , ((0, xF86XK_AudioRaiseVolume), spawn "wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%+")
-  , ((0, xF86XK_AudioMute),        spawn "wpctl set-mute   @DEFAULT_AUDIO_SINK@ toggle")
-  , ((0, xF86XK_AudioMicMute),     spawn "wpctl set-mute   @DEFAULT_AUDIO_SOURCE@ toggle")
+  , ((0, xF86XK_AudioLowerVolume), do
+        spawn "wpctl set-mute @DEFAULT_AUDIO_SINK@ 0"
+        spawn "wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%-"
+    )
+  , ((0, xF86XK_AudioRaiseVolume), do
+        spawn "wpctl set-mute @DEFAULT_AUDIO_SINK@ 0"
+        spawn "wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+"
+    )
+  , ((0, xF86XK_AudioMute), spawn "wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle")
+  , ((0, xF86XK_AudioMicMute), spawn "wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle")
     -- Displays
   , ((configModMask, xK_Left), onPrevNeighbour verticalScreenOrderer view)
   , ((configModMask, xK_Right), onNextNeighbour verticalScreenOrderer view)
