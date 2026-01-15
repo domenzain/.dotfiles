@@ -57,7 +57,13 @@ This function should only modify configuration layer settings."
      csharp
      cmake
      debug
-     (python :variables python-test-runner 'pytest)
+     (python :variables
+             python-test-runner 'pytest
+             python-formatter 'ruff
+             python-virtualenv-management 'pet
+             python-format-on-save t
+             python-enable-tools '(uv)
+             )
      emacs-lisp
      systemd
      markdown
