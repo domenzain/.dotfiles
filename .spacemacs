@@ -731,6 +731,7 @@ before packages are loaded."
                           ("-p" "%p")
                           ("-t" "-t")
                           ("-o" "ServerAliveInterval=100")
+                          ("-o" "ControlMaster=no")   ;; <— don’t create a master
                           ("-o" "RemoteCommand=\"~/slurm-allocate.sh arm-development armv8 4 2G\"")
                           ("-q")
                           ("%h")))))
@@ -744,6 +745,7 @@ before packages are loaded."
                           ("-p" "%p")
                           ("-t" "-t")
                           ("-o" "ServerAliveInterval=100")
+                          ("-o" "ControlMaster=no")   ;; <— don’t create a master
                           ("-o" "RemoteCommand=\"~/slurm-allocate.sh development std 32 64G\"")
                           ("-q")
                           ("%h")))))
