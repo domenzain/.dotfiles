@@ -1,0 +1,22 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+codex_home=${CODEX_HOME:-"$HOME/.codex"}
+codex_bin=${CODEX_BIN:-"$codex_home/packages/standalone/current/bin/codex"}
+
+if [ ! -x "$codex_bin" ]; then
+    echo "codex: standalone executable not found: $codex_bin" >&2
+    echo "codex: run $HOME/.config/codex/setup --install-only" >&2
+    exit 127
+fi
+
+# systemd does not load shell startup files. Keep a deterministic baseline for
+# Codex and the commands it launches; add host-specific paths with a unit
+# override that sets CODEX_SERVICE_PATH.
+PATH=${CODEX_SERVICE_PATH:-"$HOME/.local/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin"}
+export PATH CODEX_HOME
+
+cd "${CODEX_WORKING_DIRECTORY:-$HOME}"
+exec "$codex_bin" app-server --remote-control --listen unix://
