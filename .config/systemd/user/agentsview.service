@@ -1,0 +1,16 @@
+[Unit]
+Description=AgentsView session browser
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+UMask=0077
+ExecStart=%h/.config/agentsview/service
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

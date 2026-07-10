@@ -1,0 +1,9 @@
+[Unit]
+Description=Restart AgentsView after a binary update
+
+[Path]
+PathChanged=%h/.local/bin/agentsview
+Unit=agentsview-binary-restart.service
+
+[Install]
+WantedBy=default.target

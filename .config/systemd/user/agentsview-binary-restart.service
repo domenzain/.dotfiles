@@ -1,0 +1,6 @@
+[Unit]
+Description=Restart AgentsView after a binary update
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/systemctl --user try-restart agentsview.service

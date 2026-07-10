@@ -1,0 +1,73 @@
+#!/bin/sh
+
+set -eu
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+local_config=${AGENTSVIEW_SERVICE_CONFIG:-"$config_home/agentsview/service.local"}
+
+if [ ! -r "$local_config" ]; then
+    echo "agentsview: missing private service config: $local_config" >&2
+    exit 78
+fi
+
+# Host-specific values live outside the public dotfiles repository.
+# shellcheck source=/dev/null
+. "$local_config"
+
+agentsview_bin=${AGENTSVIEW_BIN:-"$HOME/.local/bin/agentsview"}
+if [ ! -x "$agentsview_bin" ]; then
+    agentsview_bin=$(command -v agentsview 2>/dev/null || true)
+fi
+if [ -z "$agentsview_bin" ] || [ ! -x "$agentsview_bin" ]; then
+    echo "agentsview: executable not found" >&2
+    exit 127
+fi
+
+bind_host=${AGENTSVIEW_BIND_HOST:-127.0.0.1}
+port=${AGENTSVIEW_PORT:-8080}
+require_auth=${AGENTSVIEW_REQUIRE_AUTH:-1}
+
+case $port in
+    ''|*[!0-9]*)
+        echo "agentsview: AGENTSVIEW_PORT must be numeric" >&2
+        exit 78
+        ;;
+esac
+
+set -- serve --host "$bind_host" --port "$port" --no-browser
+
+case $require_auth in
+    1|true|yes) set -- "$@" --require-auth ;;
+    0|false|no) ;;
+    *)
+        echo "agentsview: AGENTSVIEW_REQUIRE_AUTH must be true or false" >&2
+        exit 78
+        ;;
+esac
+
+if [ -n "${AGENTSVIEW_PUBLIC_URL:-}" ]; then
+    set -- "$@" --public-url "$AGENTSVIEW_PUBLIC_URL"
+fi
+
+public_origins=${AGENTSVIEW_PUBLIC_ORIGINS:-}
+case $public_origins in
+    ,*|*,|*,,*)
+        echo "agentsview: AGENTSVIEW_PUBLIC_ORIGINS contains an empty entry" >&2
+        exit 78
+        ;;
+esac
+while [ -n "$public_origins" ]; do
+    case $public_origins in
+        *,*)
+            public_origin=${public_origins%%,*}
+            public_origins=${public_origins#*,}
+            ;;
+        *)
+            public_origin=$public_origins
+            public_origins=
+            ;;
+    esac
+    set -- "$@" --public-origin "$public_origin"
+done
+
+exec "$agentsview_bin" "$@"
