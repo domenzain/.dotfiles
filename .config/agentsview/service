@@ -7,6 +7,7 @@ local_config=${AGENTSVIEW_SERVICE_CONFIG:-"$config_home/agentsview/service.local
 
 if [ ! -r "$local_config" ]; then
     echo "agentsview: missing private service config: $local_config" >&2
+    echo "agentsview: run $config_home/agentsview/setup --init-only" >&2
     exit 78
 fi
 

@@ -1,0 +1,16 @@
+# The tracked setup command copies this file to service.local only when absent.
+# Customize service.local per host; do not edit this example in place.
+# service.local is intentionally untracked because it can contain private
+# hostnames, tailnet addresses, public origins, and other machine details.
+
+AGENTSVIEW_BIND_HOST=127.0.0.1
+AGENTSVIEW_PORT=8080
+AGENTSVIEW_REQUIRE_AUTH=1
+
+# Optional. AgentsView accepts one canonical public URL and any additional
+# trusted origins as a comma-separated list.
+# AGENTSVIEW_PUBLIC_URL=https://host.example
+# AGENTSVIEW_PUBLIC_ORIGINS=https://host.example,http://host
+
+# Optional when the binary is not installed at ~/.local/bin/agentsview.
+# AGENTSVIEW_BIN=/path/to/agentsview
