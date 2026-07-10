@@ -40,7 +40,13 @@ install_codex() {
 
     installer=$(mktemp "${TMPDIR:-/tmp}/codex-install.XXXXXX")
     curl -fsSL https://chatgpt.com/codex/install.sh -o "$installer"
-    sh "$installer"
+    # Keep installation independent of shell startup files. Including the
+    # visible command directory in PATH makes the official installer skip its
+    # profile-editing step; hiding other package-manager bins also prevents a
+    # stale npm Codex from being treated as the active install.
+    PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" \
+        CODEX_NON_INTERACTIVE=1 \
+        sh "$installer"
     rm -f "$installer"
 
     if [ ! -x "$codex_bin" ]; then
