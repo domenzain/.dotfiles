@@ -1,6 +1,0 @@
-[Unit]
-Description=Restart Codex remote control after a standalone binary update
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/systemctl --user try-restart codex-remote-control.service

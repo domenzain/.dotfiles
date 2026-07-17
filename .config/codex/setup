@@ -19,18 +19,25 @@ case $action in
 esac
 
 if [ "$(uname -s)" != Linux ]; then
-    echo "codex: this setup currently supports systemd-based Linux hosts only" >&2
-    exit 69
-fi
-if ! command -v systemctl >/dev/null 2>&1; then
-    echo "codex: systemctl is required" >&2
+    echo "codex: this setup currently supports Linux hosts only" >&2
     exit 69
 fi
 
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+config_dir=$config_home/codex
+unit_dir=$config_home/systemd/user
+service=codex-remote-control.service
+unit_template=$config_dir/systemd/$service
+unit_link=$unit_dir/$service
 codex_home=${CODEX_HOME:-"$HOME/.codex"}
 codex_bin=$codex_home/packages/standalone/current/bin/codex
-service=codex-remote-control.service
-path_unit=codex-binary.path
+
+require_systemd() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "codex: systemctl is required for service actions" >&2
+        exit 69
+    fi
+}
 
 install_codex() {
     if ! command -v curl >/dev/null 2>&1; then
@@ -39,19 +46,26 @@ install_codex() {
     fi
 
     installer=$(mktemp "${TMPDIR:-/tmp}/codex-install.XXXXXX")
+    trap 'rm -f "$installer"' 0 1 2 15
     curl -fsSL https://chatgpt.com/codex/install.sh -o "$installer"
     # Keep installation independent of shell startup files. Including the
-    # visible command directory in PATH makes the official installer skip its
-    # profile-editing step; hiding other package-manager bins also prevents a
-    # stale npm Codex from being treated as the active install.
+    # visible command directory makes the official installer skip profile
+    # edits and hides stale package-manager installations from detection.
     PATH="$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin" \
         CODEX_NON_INTERACTIVE=1 \
         sh "$installer"
     rm -f "$installer"
+    trap - 0 1 2 15
 
     if [ ! -x "$codex_bin" ]; then
         echo "codex: installer did not create $codex_bin" >&2
         exit 70
+    fi
+}
+
+ensure_codex() {
+    if [ ! -x "$codex_bin" ]; then
+        install_codex
     fi
 }
 
@@ -65,14 +79,31 @@ require_codex() {
 
 require_login() {
     if ! "$codex_bin" login status >/dev/null 2>&1; then
-        echo "codex: log in before enabling remote control:" >&2
-        echo "  $codex_bin login" >&2
+        echo "codex: device login is required before enabling remote control:" >&2
+        echo "  $codex_bin login --device-auth" >&2
         exit 78
     fi
 }
 
-reload_units() {
-    systemctl --user daemon-reload
+install_unit() {
+    if [ ! -r "$unit_template" ]; then
+        echo "codex: missing tracked unit template: $unit_template" >&2
+        exit 66
+    fi
+    mkdir -p "$unit_dir"
+    rm -f "$unit_link"
+    ln -s "$unit_template" "$unit_link"
+}
+
+remove_unit() {
+    rm -f "$unit_link"
+}
+
+remove_legacy_watcher() {
+    systemctl --user disable --now codex-binary.path \
+        codex-binary-restart.service >/dev/null 2>&1 || true
+    rm -f "$unit_dir/codex-binary.path"
+    rm -f "$unit_dir/codex-binary-restart.service"
 }
 
 wait_for_service() {
@@ -88,6 +119,36 @@ wait_for_service() {
     done
 }
 
+request_graceful_restart() {
+    if systemctl --user is-active --quiet "$service"; then
+        # Codex handles SIGHUP by draining every running assistant turn before
+        # exiting. Restart=always then launches the installed binary.
+        systemctl --user kill --kill-who=main --signal=SIGHUP "$service"
+        echo "codex: graceful restart requested; active turns will finish first"
+    else
+        systemctl --user start "$service"
+        wait_for_service
+    fi
+}
+
+restart_if_version_changed() {
+    if ! systemctl --user is-active --quiet "$service"; then
+        return
+    fi
+
+    version_json=$("$codex_bin" app-server daemon version 2>/dev/null || true)
+    managed_version=$(printf '%s\n' "$version_json" |
+        sed -n 's/.*"managedCodexVersion":"\([^"]*\)".*/\1/p')
+    running_version=$(printf '%s\n' "$version_json" |
+        sed -n 's/.*"appServerVersion":"\([^"]*\)".*/\1/p')
+
+    if [ -n "$managed_version" ] && [ -n "$running_version" ] &&
+        [ "$managed_version" != "$running_version" ]
+    then
+        request_graceful_restart
+    fi
+}
+
 report_linger() {
     if command -v loginctl >/dev/null 2>&1; then
         current_user=$(id -un)
@@ -100,67 +161,52 @@ report_linger() {
 }
 
 case $action in
-    --install-only|--update)
-        # Avoid a duplicate restart if the path watcher sees the installer move
-        # the standalone current symlink while setup is still running.
-        path_was_active=0
-        if systemctl --user is-active --quiet "$path_unit"; then
-            path_was_active=1
-            systemctl --user stop "$path_unit"
-        fi
-        service_was_active=0
-        if systemctl --user is-active --quiet "$service"; then
-            service_was_active=1
-        fi
-
-        install_codex
-        reload_units
-
-        if [ "$path_was_active" -eq 1 ] || systemctl --user is-enabled --quiet "$path_unit"; then
-            systemctl --user start "$path_unit"
-        fi
-        if [ "$service_was_active" -eq 1 ]; then
-            systemctl --user restart "$service"
-            wait_for_service
-        fi
+    --install-only)
+        ensure_codex
         "$codex_bin" --version
-        echo "codex: standalone install and optional service units are ready"
+        ;;
+    --update)
+        require_systemd
+        install_codex
+        restart_if_version_changed
+        "$codex_bin" --version
         ;;
     --enable)
-        install_codex
+        require_systemd
+        ensure_codex
         require_login
-        reload_units
-        systemctl --user enable "$service" "$path_unit"
-        systemctl --user restart "$service"
-        systemctl --user start "$path_unit"
-        wait_for_service
+        install_unit
+        remove_legacy_watcher
+        systemctl --user daemon-reload
+        systemctl --user enable "$service"
+        request_graceful_restart
         report_linger
         echo "codex: remote-control service enabled"
         ;;
     --disable)
-        reload_units
-        systemctl --user disable --now "$path_unit" "$service"
-        echo "codex: remote-control service disabled"
+        require_systemd
+        systemctl --user disable --now "$service" >/dev/null 2>&1 || true
+        remove_legacy_watcher
+        remove_unit
+        systemctl --user daemon-reload
+        echo "codex: remote-control service disabled and uninstalled"
         ;;
     --restart)
+        require_systemd
         require_codex
         require_login
-        reload_units
-        systemctl --user restart "$service"
-        wait_for_service
-        if systemctl --user is-enabled --quiet "$path_unit"; then
-            systemctl --user start "$path_unit"
-        fi
-        echo "codex: remote-control service restarted"
+        install_unit
+        systemctl --user daemon-reload
+        request_graceful_restart
         ;;
     --status)
+        require_systemd
         require_codex
         "$codex_bin" --version
         "$codex_bin" login status || true
+        printf "unit installed:  %s\n" "$([ -L "$unit_link" ] && echo yes || echo no)"
         printf "service enabled: %s\n" "$(systemctl --user is-enabled "$service" 2>/dev/null || true)"
         printf "service active:  %s\n" "$(systemctl --user is-active "$service" 2>/dev/null || true)"
-        printf "watcher enabled: %s\n" "$(systemctl --user is-enabled "$path_unit" 2>/dev/null || true)"
-        printf "watcher active:  %s\n" "$(systemctl --user is-active "$path_unit" 2>/dev/null || true)"
-        systemctl --user status "$service" "$path_unit" --no-pager || true
+        systemctl --user status "$service" --no-pager || true
         ;;
 esac

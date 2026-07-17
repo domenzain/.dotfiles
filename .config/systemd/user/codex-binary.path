@@ -1,9 +1,0 @@
-[Unit]
-Description=Restart Codex remote control after a standalone binary update
-
-[Path]
-PathChanged=%h/.codex/packages/standalone/current/bin/codex
-Unit=codex-binary-restart.service
-
-[Install]
-WantedBy=default.target

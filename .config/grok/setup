@@ -1,0 +1,383 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+usage() {
+    echo "usage: $0 [--install-only|--enable|--disable|--restart|--status|--update]" >&2
+    exit 64
+}
+
+if [ "$#" -gt 1 ]; then
+    usage
+fi
+
+action=${1:---install-only}
+case $action in
+    --install-only|--enable|--disable|--restart|--status|--update) ;;
+    *) usage ;;
+esac
+
+if [ "$(uname -s)" != Linux ]; then
+    echo "grok: this setup currently supports Linux hosts only" >&2
+    exit 69
+fi
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+config_dir=$config_home/grok
+unit_dir=$config_home/systemd/user
+service=grok-agent.service
+unit_template=$config_dir/systemd/$service
+unit_link=$unit_dir/$service
+local_template=$config_dir/service.local.example
+local_config=$config_dir/service.local
+grok_home=${GROK_HOME:-"$HOME/.grok"}
+grok_bin=${GROK_BIN:-"$grok_home/bin/grok"}
+session_file=$grok_home/active_sessions.json
+session_lock=$grok_home/active_sessions.lock
+restart_marker=$grok_home/service-restart-required
+service_was_active=0
+
+require_systemd() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "grok: systemctl is required for service actions" >&2
+        exit 69
+    fi
+}
+
+require_jq() {
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "grok: jq is required for safe update checks" >&2
+        exit 69
+    fi
+}
+
+install_grok() {
+    if ! command -v curl >/dev/null 2>&1 || ! command -v bash >/dev/null 2>&1; then
+        echo "grok: curl and bash are required to install the CLI" >&2
+        exit 69
+    fi
+
+    installer=$(mktemp "${TMPDIR:-/tmp}/grok-install.XXXXXX")
+    if ! curl -fsSL https://x.ai/cli/install.sh -o "$installer"; then
+        rm -f "$installer"
+        return 1
+    fi
+    if ! PATH="$grok_home/bin:/usr/local/bin:/usr/bin:/bin" \
+        SHELL=/bin/false \
+        GROK_BIN_DIR="$grok_home/bin" \
+        GROK_CHANNEL=stable \
+        bash "$installer"
+    then
+        rm -f "$installer"
+        return 1
+    fi
+    rm -f "$installer"
+
+    if [ ! -x "$grok_bin" ]; then
+        echo "grok: installer did not create $grok_bin" >&2
+        exit 70
+    fi
+}
+
+ensure_grok() {
+    if [ ! -x "$grok_bin" ]; then
+        install_grok
+    fi
+}
+
+require_grok() {
+    if [ ! -x "$grok_bin" ]; then
+        echo "grok: executable not found: $grok_bin" >&2
+        echo "grok: run $0 --install-only" >&2
+        exit 127
+    fi
+}
+
+require_login() {
+    require_jq
+    if [ ! -r "$grok_home/auth.json" ] ||
+        ! jq -e 'type == "object" and length > 0' "$grok_home/auth.json" >/dev/null 2>&1
+    then
+        echo "grok: device login is required before enabling the service:" >&2
+        echo "  $grok_bin login --device-auth" >&2
+        exit 78
+    fi
+}
+
+ensure_local_config() {
+    if [ ! -r "$local_template" ]; then
+        echo "grok: missing tracked template: $local_template" >&2
+        exit 66
+    fi
+    mkdir -p "$config_dir"
+    chmod 700 "$config_dir"
+    if [ ! -e "$local_config" ]; then
+        install -m 600 "$local_template" "$local_config"
+        echo "grok: created $local_config"
+    else
+        chmod 600 "$local_config"
+        echo "grok: preserved existing $local_config"
+    fi
+
+    if ! grep -q '^GROK_AGENT_SECRET=' "$local_config"; then
+        secret=$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+        printf '\nGROK_AGENT_SECRET=%s\n' "$secret" >>"$local_config"
+        echo "grok: generated a stable private service secret"
+    fi
+}
+
+install_unit() {
+    if [ ! -r "$unit_template" ]; then
+        echo "grok: missing tracked unit template: $unit_template" >&2
+        exit 66
+    fi
+    mkdir -p "$unit_dir"
+    rm -f "$unit_link"
+    ln -s "$unit_template" "$unit_link"
+}
+
+remove_unit() {
+    rm -f "$unit_link"
+}
+
+remove_legacy_watcher() {
+    systemctl --user disable --now grok-binary.path \
+        grok-binary-restart.service >/dev/null 2>&1 || true
+    rm -f "$unit_dir/grok-binary.path"
+    rm -f "$unit_dir/grok-binary-restart.service"
+}
+
+wait_for_service() {
+    attempts=0
+    while ! systemctl --user is-active --quiet "$service"; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 40 ]; then
+            echo "grok: service did not become active" >&2
+            systemctl --user status "$service" --no-pager >&2 || true
+            exit 75
+        fi
+        sleep 0.25
+    done
+    sleep 0.5
+    if ! systemctl --user is-active --quiet "$service"; then
+        echo "grok: service exited during startup" >&2
+        systemctl --user status "$service" --no-pager >&2 || true
+        exit 75
+    fi
+}
+
+acquire_session_lock() {
+    mkdir -p "$grok_home"
+    exec 9>>"$session_lock"
+    if ! flock -w 5 9; then
+        exec 9>&-
+        echo "grok: session registry is busy; deferring service change"
+        return 1
+    fi
+}
+
+release_session_lock() {
+    flock -u 9
+    exec 9>&-
+}
+
+has_live_sessions() {
+    if [ ! -r "$session_file" ]; then
+        return 1
+    fi
+    if ! count=$(jq -r 'if type == "array" then length else error("not an array") end' "$session_file" 2>/dev/null); then
+        echo "grok: cannot validate active_sessions.json; treating Grok as busy" >&2
+        return 0
+    fi
+    if [ "$count" -eq 0 ]; then
+        return 1
+    fi
+
+    pids=$(jq -r '.[] | (.pid // "unknown") | tostring' "$session_file")
+    for pid in $pids; do
+        case $pid in
+            ''|*[!0-9]*)
+                echo "grok: active session has no valid PID; treating Grok as busy" >&2
+                return 0
+                ;;
+        esac
+        if [ -d "/proc/$pid" ]; then
+            echo "grok: active task registered by PID $pid; update deferred"
+            return 0
+        fi
+    done
+    return 1
+}
+
+binary_is_stale() {
+    if ! systemctl --user is-active --quiet "$service"; then
+        return 1
+    fi
+    main_pid=$(systemctl --user show "$service" -p MainPID --value)
+    case $main_pid in
+        ''|0|*[!0-9]*) return 1 ;;
+    esac
+    running_id=$(stat -Lc '%d:%i' "/proc/$main_pid/exe" 2>/dev/null || true)
+    installed_id=$(stat -Lc '%d:%i' "$grok_bin" 2>/dev/null || true)
+    [ -n "$running_id" ] && [ -n "$installed_id" ] && [ "$running_id" != "$installed_id" ]
+}
+
+stop_when_idle() {
+    require_jq
+    if ! acquire_session_lock; then
+        return 1
+    fi
+    if has_live_sessions; then
+        release_session_lock
+        return 1
+    fi
+
+    service_was_active=0
+    if systemctl --user is-active --quiet "$service"; then
+        service_was_active=1
+        # Hold Grok's own registry lock through stop so a new task cannot race
+        # the idle check and receive a termination signal.
+        if ! systemctl --user stop "$service"; then
+            release_session_lock
+            systemctl --user start "$service" >/dev/null 2>&1 || true
+            return 1
+        fi
+    fi
+    release_session_lock
+}
+
+restore_service() {
+    if [ "$service_was_active" -eq 1 ]; then
+        systemctl --user start "$service" || true
+    fi
+}
+
+restart_when_idle() {
+    touch "$restart_marker"
+    if ! stop_when_idle; then
+        echo "grok: restart remains pending and will be retried hourly"
+        return 0
+    fi
+    trap 'restore_service' 0 1 2 15
+    systemctl --user start "$service"
+    wait_for_service
+    service_was_active=0
+    rm -f "$restart_marker"
+    trap - 0 1 2 15
+}
+
+update_grok() {
+    require_grok
+    require_systemd
+    require_jq
+
+    if ! check_json=$("$grok_bin" update --check --json); then
+        echo "grok: update check failed" >&2
+        return 1
+    fi
+    if ! printf '%s\n' "$check_json" | jq -e . >/dev/null 2>&1; then
+        echo "grok: update check returned invalid JSON" >&2
+        return 1
+    fi
+    check_error=$(printf '%s\n' "$check_json" | jq -r '.error // empty')
+    if [ -n "$check_error" ]; then
+        echo "grok: update check failed: $check_error" >&2
+        return 1
+    fi
+    update_available=$(printf '%s\n' "$check_json" | jq -r '.updateAvailable // false')
+
+    stale=false
+    if binary_is_stale || [ -e "$restart_marker" ]; then
+        stale=true
+    fi
+    if [ "$update_available" != true ] && [ "$stale" != true ]; then
+        current=$(printf '%s\n' "$check_json" | jq -r '.currentVersion // "unknown"')
+        echo "grok: $current is up to date"
+        return 0
+    fi
+
+    if ! stop_when_idle; then
+        echo "grok: update/restart deferred until no task is active"
+        return 0
+    fi
+    trap 'restore_service' 0 1 2 15
+
+    if [ "$update_available" = true ]; then
+        install_grok
+    fi
+    if [ "$service_was_active" -eq 1 ]; then
+        systemctl --user start "$service"
+        wait_for_service
+    fi
+    service_was_active=0
+    rm -f "$restart_marker"
+    trap - 0 1 2 15
+    "$grok_bin" --version
+}
+
+report_linger() {
+    if command -v loginctl >/dev/null 2>&1; then
+        current_user=$(id -un)
+        linger=$(loginctl show-user "$current_user" -p Linger --value 2>/dev/null || true)
+        if [ "$linger" != yes ]; then
+            echo "grok: enable boot-time user services with:"
+            echo "  loginctl enable-linger \"$current_user\""
+        fi
+    fi
+}
+
+case $action in
+    --install-only)
+        ensure_grok
+        "$grok_bin" --version
+        ;;
+    --update)
+        update_grok
+        ;;
+    --enable)
+        require_systemd
+        ensure_grok
+        require_login
+        ensure_local_config
+        install_unit
+        remove_legacy_watcher
+        systemctl --user daemon-reload
+        systemctl --user enable "$service"
+        if systemctl --user is-active --quiet "$service"; then
+            restart_when_idle
+        else
+            systemctl --user start "$service"
+            wait_for_service
+        fi
+        report_linger
+        echo "grok: agent service enabled"
+        ;;
+    --disable)
+        require_systemd
+        systemctl --user disable --now "$service" >/dev/null 2>&1 || true
+        remove_legacy_watcher
+        remove_unit
+        rm -f "$restart_marker"
+        systemctl --user daemon-reload
+        echo "grok: agent service disabled and uninstalled"
+        ;;
+    --restart)
+        require_systemd
+        require_grok
+        ensure_local_config
+        install_unit
+        systemctl --user daemon-reload
+        restart_when_idle
+        ;;
+    --status)
+        require_systemd
+        require_grok
+        "$grok_bin" --version
+        printf "unit installed:  %s\n" "$([ -L "$unit_link" ] && echo yes || echo no)"
+        printf "service enabled: %s\n" "$(systemctl --user is-enabled "$service" 2>/dev/null || true)"
+        printf "service active:  %s\n" "$(systemctl --user is-active "$service" 2>/dev/null || true)"
+        printf "restart pending: %s\n" "$([ -e "$restart_marker" ] && echo yes || echo no)"
+        systemctl --user status "$service" --no-pager || true
+        ;;
+esac

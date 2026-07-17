@@ -1,0 +1,6 @@
+# These links are created only by the explicit agent-services setup.
+/agent-services-update.service
+/agent-services-update.timer
+/agentsview.service
+/codex-remote-control.service
+/grok-agent.service

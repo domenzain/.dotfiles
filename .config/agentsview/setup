@@ -3,106 +3,281 @@
 set -eu
 umask 077
 
-if [ "$#" -gt 1 ]; then
-    echo "usage: $0 [--init-only]" >&2
+usage() {
+    echo "usage: $0 [--init-only|--enable|--disable|--restart|--status|--update]" >&2
     exit 64
+}
+
+if [ "$#" -gt 1 ]; then
+    usage
 fi
 
-case ${1:-} in
-    ''|--init-only) ;;
-    *)
-        echo "usage: $0 [--init-only]" >&2
-        exit 64
-        ;;
+action=${1:---enable}
+case $action in
+    --init-only|--enable|--disable|--restart|--status|--update) ;;
+    *) usage ;;
 esac
 
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 config_dir=$config_home/agentsview
 template=$config_dir/service.local.example
 local_config=$config_dir/service.local
+unit_dir=$config_home/systemd/user
+service=agentsview.service
+unit_template=$config_dir/systemd/$service
+unit_link=$unit_dir/$service
+agentsview_bin=
+service_should_run=0
 
-if [ ! -r "$template" ]; then
-    echo "agentsview: missing tracked template: $template" >&2
-    exit 66
-fi
+init_config() {
+    if [ ! -r "$template" ]; then
+        echo "agentsview: missing tracked template: $template" >&2
+        exit 66
+    fi
 
-mkdir -p "$config_dir"
-chmod 700 "$config_dir"
+    mkdir -p "$config_dir"
+    chmod 700 "$config_dir"
+    if [ ! -e "$local_config" ]; then
+        install -m 600 "$template" "$local_config"
+        echo "agentsview: created $local_config"
+    else
+        chmod 600 "$local_config"
+        echo "agentsview: preserved existing $local_config"
+    fi
+}
 
-if [ ! -e "$local_config" ]; then
-    install -m 600 "$template" "$local_config"
-    echo "agentsview: created $local_config"
-else
-    chmod 600 "$local_config"
-    echo "agentsview: preserved existing $local_config"
-fi
+resolve_binary() {
+    if [ -r "$local_config" ]; then
+        # shellcheck source=/dev/null
+        . "$local_config"
+    fi
+    agentsview_bin=${AGENTSVIEW_BIN:-"$HOME/.local/bin/agentsview"}
+    if [ ! -x "$agentsview_bin" ]; then
+        agentsview_bin=$(command -v agentsview 2>/dev/null || true)
+    fi
+    if [ -z "$agentsview_bin" ] || [ ! -x "$agentsview_bin" ]; then
+        echo "agentsview: install the binary before managing its service" >&2
+        exit 127
+    fi
+}
 
-if [ "${1:-}" = --init-only ]; then
-    echo "agentsview: customize $local_config, then rerun $0"
-    exit 0
-fi
-
-# shellcheck source=/dev/null
-. "$local_config"
-agentsview_bin=${AGENTSVIEW_BIN:-"$HOME/.local/bin/agentsview"}
-if [ ! -x "$agentsview_bin" ]; then
-    agentsview_bin=$(command -v agentsview 2>/dev/null || true)
-fi
-if [ -z "$agentsview_bin" ] || [ ! -x "$agentsview_bin" ]; then
-    echo "agentsview: install the agentsview binary before enabling its service" >&2
-    exit 127
-fi
-
-case $(uname -s) in
-    Linux)
-        systemctl --user daemon-reload
-        systemctl --user enable agentsview.service agentsview-binary.path
-        systemctl --user restart agentsview.service
-        systemctl --user start agentsview-binary.path
-
-        if command -v loginctl >/dev/null 2>&1; then
-            current_user=$(id -un)
-            linger=$(loginctl show-user "$current_user" -p Linger --value 2>/dev/null || true)
-            if [ "$linger" != yes ]; then
-                echo "agentsview: enable boot-time user services with:"
-                echo "  loginctl enable-linger \"$current_user\""
-            fi
-        fi
-        ;;
-    Darwin)
-        domain=gui/$(id -u)
-        label=$domain/io.agentsview.service
-        plist=$HOME/Library/LaunchAgents/io.agentsview.service.plist
-
-        if launchctl print "$label" >/dev/null 2>&1; then
-            launchctl bootout "$label"
-        fi
-
-        attempts=0
-        while launchctl print "$label" >/dev/null 2>&1; do
-            attempts=$((attempts + 1))
-            if [ "$attempts" -ge 50 ]; then
-                echo "agentsview: timed out waiting for launchd to unload $label" >&2
-                exit 75
-            fi
-            sleep 0.1
-        done
-
-        attempts=0
-        until launchctl bootstrap "$domain" "$plist" 2>/dev/null; do
-            attempts=$((attempts + 1))
-            if [ "$attempts" -ge 20 ]; then
-                echo "agentsview: launchd bootstrap failed for $plist" >&2
-                launchctl bootstrap "$domain" "$plist"
-                exit 1
-            fi
-            sleep 0.25
-        done
-        ;;
-    *)
-        echo "agentsview: unsupported service manager on $(uname -s)" >&2
+require_systemd() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "agentsview: systemctl is required for Linux service actions" >&2
         exit 69
+    fi
+}
+
+install_unit() {
+    if [ ! -r "$unit_template" ]; then
+        echo "agentsview: missing tracked unit template: $unit_template" >&2
+        exit 66
+    fi
+    mkdir -p "$unit_dir"
+    rm -f "$unit_link"
+    ln -s "$unit_template" "$unit_link"
+}
+
+remove_unit() {
+    rm -f "$unit_link"
+}
+
+remove_legacy_watcher() {
+    systemctl --user disable --now agentsview-binary.path \
+        agentsview-binary-restart.service >/dev/null 2>&1 || true
+    rm -f "$unit_dir/agentsview-binary.path"
+    rm -f "$unit_dir/agentsview-binary-restart.service"
+}
+
+wait_for_service() {
+    attempts=0
+    while ! systemctl --user is-active --quiet "$service"; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 40 ]; then
+            echo "agentsview: service did not become active" >&2
+            systemctl --user status "$service" --no-pager >&2 || true
+            exit 75
+        fi
+        sleep 0.25
+    done
+    sleep 0.5
+    if ! systemctl --user is-active --quiet "$service"; then
+        echo "agentsview: service exited during startup" >&2
+        systemctl --user status "$service" --no-pager >&2 || true
+        exit 75
+    fi
+}
+
+binary_is_stale() {
+    if ! systemctl --user is-active --quiet "$service"; then
+        return 1
+    fi
+    main_pid=$(systemctl --user show "$service" -p MainPID --value)
+    case $main_pid in
+        ''|0|*[!0-9]*) return 1 ;;
+    esac
+    running_id=$(stat -Lc '%d:%i' "/proc/$main_pid/exe" 2>/dev/null || true)
+    installed_id=$(stat -Lc '%d:%i' "$agentsview_bin" 2>/dev/null || true)
+    [ -n "$running_id" ] && [ -n "$installed_id" ] && [ "$running_id" != "$installed_id" ]
+}
+
+restore_service() {
+    if [ "$service_should_run" -eq 1 ]; then
+        systemctl --user start "$service" || true
+    fi
+}
+
+update_linux() {
+    require_systemd
+    resolve_binary
+
+    if ! check_output=$("$agentsview_bin" update --check --force 2>&1); then
+        printf '%s\n' "$check_output" >&2
+        return 1
+    fi
+    printf '%s\n' "$check_output"
+
+    update_available=0
+    case $check_output in
+        *"Update available:"*) update_available=1 ;;
+    esac
+    stale=0
+    if binary_is_stale; then
+        stale=1
+    fi
+    if [ "$update_available" -eq 0 ] && [ "$stale" -eq 0 ]; then
+        return 0
+    fi
+
+    service_should_run=0
+    if systemctl --user is-active --quiet "$service" ||
+        systemctl --user is-enabled --quiet "$service"
+    then
+        service_should_run=1
+    fi
+    trap 'restore_service' 0 1 2 15
+
+    systemctl --user stop "$service" >/dev/null 2>&1 || true
+    # If a manual update previously launched an unmanaged background daemon,
+    # remove it before updating so systemd remains the sole owner.
+    "$agentsview_bin" daemon stop >/dev/null 2>&1 || true
+
+    if [ "$update_available" -eq 1 ]; then
+        "$agentsview_bin" update --yes --force
+    fi
+    if [ "$service_should_run" -eq 1 ]; then
+        systemctl --user start "$service"
+        wait_for_service
+    fi
+    service_should_run=0
+    trap - 0 1 2 15
+}
+
+enable_linux() {
+    require_systemd
+    init_config
+    resolve_binary
+    install_unit
+    remove_legacy_watcher
+    systemctl --user daemon-reload
+    systemctl --user enable "$service"
+    systemctl --user restart "$service"
+    wait_for_service
+}
+
+disable_linux() {
+    require_systemd
+    systemctl --user disable --now "$service" >/dev/null 2>&1 || true
+    remove_legacy_watcher
+    remove_unit
+    systemctl --user daemon-reload
+}
+
+enable_macos() {
+    init_config
+    resolve_binary
+    domain=gui/$(id -u)
+    label=$domain/io.agentsview.service
+    plist=$HOME/Library/LaunchAgents/io.agentsview.service.plist
+
+    if launchctl print "$label" >/dev/null 2>&1; then
+        launchctl bootout "$label"
+    fi
+    attempts=0
+    while launchctl print "$label" >/dev/null 2>&1; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 50 ]; then
+            echo "agentsview: timed out waiting for launchd to unload $label" >&2
+            exit 75
+        fi
+        sleep 0.1
+    done
+    launchctl bootstrap "$domain" "$plist"
+}
+
+case $action in
+    --init-only)
+        init_config
+        ;;
+    --enable)
+        case $(uname -s) in
+            Linux) enable_linux ;;
+            Darwin) enable_macos ;;
+            *) echo "agentsview: unsupported service manager on $(uname -s)" >&2; exit 69 ;;
+        esac
+        echo "agentsview: service enabled"
+        ;;
+    --disable)
+        case $(uname -s) in
+            Linux) disable_linux ;;
+            Darwin)
+                domain=gui/$(id -u)
+                launchctl bootout "$domain/io.agentsview.service" >/dev/null 2>&1 || true
+                ;;
+            *) echo "agentsview: unsupported service manager on $(uname -s)" >&2; exit 69 ;;
+        esac
+        echo "agentsview: service disabled and uninstalled"
+        ;;
+    --restart)
+        case $(uname -s) in
+            Linux)
+                require_systemd
+                init_config
+                resolve_binary
+                install_unit
+                systemctl --user daemon-reload
+                systemctl --user restart "$service"
+                wait_for_service
+                ;;
+            Darwin) enable_macos ;;
+            *) echo "agentsview: unsupported service manager on $(uname -s)" >&2; exit 69 ;;
+        esac
+        echo "agentsview: service restarted"
+        ;;
+    --status)
+        resolve_binary
+        "$agentsview_bin" --version
+        case $(uname -s) in
+            Linux)
+                require_systemd
+                printf "unit installed:  %s\n" "$([ -L "$unit_link" ] && echo yes || echo no)"
+                printf "service enabled: %s\n" "$(systemctl --user is-enabled "$service" 2>/dev/null || true)"
+                printf "service active:  %s\n" "$(systemctl --user is-active "$service" 2>/dev/null || true)"
+                systemctl --user status "$service" --no-pager || true
+                ;;
+            Darwin)
+                launchctl print "gui/$(id -u)/io.agentsview.service" || true
+                ;;
+        esac
+        ;;
+    --update)
+        case $(uname -s) in
+            Linux) update_linux ;;
+            Darwin)
+                resolve_binary
+                "$agentsview_bin" update --yes --force
+                ;;
+            *) echo "agentsview: unsupported service manager on $(uname -s)" >&2; exit 69 ;;
+        esac
         ;;
 esac
-
-echo "agentsview: service setup complete"

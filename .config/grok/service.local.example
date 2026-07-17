@@ -1,0 +1,6 @@
+# The setup helper adds a random GROK_AGENT_SECRET to the private copy.
+# Keep the service loopback-only unless remote transport is explicitly secured.
+GROK_AGENT_BIND=127.0.0.1:2419
+
+# Optional when Grok is installed somewhere other than ~/.grok/bin/grok.
+# GROK_BIN=/path/to/grok

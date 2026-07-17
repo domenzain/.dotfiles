@@ -1,0 +1,12 @@
+[Unit]
+Description=Check and safely apply agent service updates
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+UMask=0077
+ExecStart=%h/.config/agent-services/update
+TimeoutStartSec=45min
+Nice=10
+IOSchedulingClass=idle

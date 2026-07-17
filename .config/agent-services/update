@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+umask 077
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
+    lock_dir=$XDG_RUNTIME_DIR
+else
+    lock_dir=$HOME/.cache
+    mkdir -p "$lock_dir"
+fi
+
+exec 9>>"$lock_dir/agent-services-update.lock"
+if ! flock -n 9; then
+    echo "agent-services: another update run is active; skipping"
+    exit 0
+fi
+
+failures=0
+run_update() {
+    local name=$1
+    local helper=$2
+
+    echo
+    echo "==> Checking $name"
+    if ! "$helper" --update; then
+        echo "agent-services: $name update failed; the next hourly run will retry" >&2
+        failures=$((failures + 1))
+    fi
+}
+
+run_update AgentsView "$config_home/agentsview/setup"
+run_update Grok "$config_home/grok/setup"
+run_update Codex "$config_home/codex/setup"
+
+if (( failures > 0 )); then
+    echo "agent-services: $failures update check(s) failed" >&2
+    exit 1
+fi
+
+echo
+echo "agent-services: hourly update check complete"

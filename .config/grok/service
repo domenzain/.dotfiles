@@ -1,0 +1,38 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+local_config=${GROK_SERVICE_CONFIG:-"$config_home/grok/service.local"}
+
+if [ ! -r "$local_config" ]; then
+    echo "grok: missing private service config: $local_config" >&2
+    echo "grok: run $config_home/grok/setup --enable" >&2
+    exit 78
+fi
+
+# shellcheck source=/dev/null
+. "$local_config"
+
+if [ -z "${GROK_AGENT_SECRET:-}" ]; then
+    echo "grok: GROK_AGENT_SECRET is missing from $local_config" >&2
+    exit 78
+fi
+
+grok_home=${GROK_HOME:-"$HOME/.grok"}
+grok_bin=${GROK_BIN:-"$grok_home/bin/grok"}
+if [ ! -x "$grok_bin" ]; then
+    echo "grok: executable not found: $grok_bin" >&2
+    echo "grok: run $config_home/grok/setup --install-only" >&2
+    exit 127
+fi
+
+# systemd does not load shell startup files. Disable Grok's internal updater so
+# the shared timer is the only process allowed to replace and restart it.
+PATH=${GROK_SERVICE_PATH:-"$HOME/.local/bin:$HOME/.cargo/bin:$HOME/go/bin:/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin"}
+GROK_DISABLE_AUTOUPDATER=1
+export PATH GROK_HOME GROK_AGENT_SECRET GROK_DISABLE_AUTOUPDATER
+
+cd "${GROK_WORKING_DIRECTORY:-$HOME}"
+exec "$grok_bin" agent serve --bind "${GROK_AGENT_BIND:-127.0.0.1:2419}"

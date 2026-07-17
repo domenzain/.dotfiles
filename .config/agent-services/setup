@@ -1,0 +1,95 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+usage() {
+    echo "usage: $0 [--enable|--disable|--status|--update]" >&2
+    exit 64
+}
+
+if [ "$#" -gt 1 ]; then
+    usage
+fi
+
+action=${1:---enable}
+case $action in
+    --enable|--disable|--status|--update) ;;
+    *) usage ;;
+esac
+
+if [ "$(uname -s)" != Linux ] || ! command -v systemctl >/dev/null 2>&1; then
+    echo "agent-services: systemd-based Linux is required" >&2
+    exit 69
+fi
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+config_dir=$config_home/agent-services
+unit_dir=$config_home/systemd/user
+update_service=agent-services-update.service
+update_timer=agent-services-update.timer
+
+install_unit() {
+    unit=$1
+    template=$config_dir/systemd/$unit
+    link=$unit_dir/$unit
+    if [ ! -r "$template" ]; then
+        echo "agent-services: missing tracked unit template: $template" >&2
+        exit 66
+    fi
+    mkdir -p "$unit_dir"
+    rm -f "$link"
+    ln -s "$template" "$link"
+}
+
+remove_unit() {
+    rm -f "$unit_dir/$1"
+}
+
+report_linger() {
+    if command -v loginctl >/dev/null 2>&1; then
+        current_user=$(id -un)
+        linger=$(loginctl show-user "$current_user" -p Linger --value 2>/dev/null || true)
+        if [ "$linger" != yes ]; then
+            echo "agent-services: enable boot-time user services with:"
+            echo "  loginctl enable-linger \"$current_user\""
+        fi
+    fi
+}
+
+case $action in
+    --enable)
+        # Codex goes last because an already-running app-server may schedule a
+        # graceful restart after the current assistant turn drains.
+        "$config_home/agentsview/setup" --enable
+        "$config_home/grok/setup" --enable
+        "$config_home/codex/setup" --enable
+        install_unit "$update_service"
+        install_unit "$update_timer"
+        systemctl --user daemon-reload
+        systemctl --user enable --now "$update_timer"
+        report_linger
+        echo "agent-services: services and hourly updater enabled"
+        ;;
+    --disable)
+        systemctl --user disable --now "$update_timer" "$update_service" >/dev/null 2>&1 || true
+        remove_unit "$update_timer"
+        remove_unit "$update_service"
+        "$config_home/agentsview/setup" --disable
+        "$config_home/grok/setup" --disable
+        "$config_home/codex/setup" --disable
+        systemctl --user daemon-reload
+        echo "agent-services: services and hourly updater disabled"
+        ;;
+    --status)
+        printf "updater installed: %s\n" "$([ -L "$unit_dir/$update_timer" ] && echo yes || echo no)"
+        printf "timer enabled:    %s\n" "$(systemctl --user is-enabled "$update_timer" 2>/dev/null || true)"
+        printf "timer active:     %s\n" "$(systemctl --user is-active "$update_timer" 2>/dev/null || true)"
+        "$config_home/agentsview/setup" --status
+        "$config_home/grok/setup" --status
+        "$config_home/codex/setup" --status
+        ;;
+    --update)
+        exec "$config_dir/update"
+        ;;
+esac

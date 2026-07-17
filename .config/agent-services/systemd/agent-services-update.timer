@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly agent service update check
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=5m
+Persistent=true
+Unit=agent-services-update.service
+
+[Install]
+WantedBy=timers.target
