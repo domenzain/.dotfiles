@@ -236,11 +236,20 @@ verify_address() {
         else
             tcp_option=
         fi
-        answer=$(dig $tcp_option +short +time=2 +tries=1 @"$verify_ip" "$verify_name" A)
-        if ! printf '%s\n' "$answer" | grep -Fx "$expected_ip" >/dev/null 2>&1; then
-            echo "lan-dns: $transport verification failed through $verify_ip" >&2
-            exit 70
-        fi
+        attempt=1
+        while :; do
+            answer=
+            if answer=$(dig $tcp_option +short +time=2 +tries=1 @"$verify_ip" "$verify_name" A) && \
+                printf '%s\n' "$answer" | grep -Fx "$expected_ip" >/dev/null 2>&1; then
+                break
+            fi
+            if [ "$attempt" -ge 3 ]; then
+                echo "lan-dns: $transport verification failed through $verify_ip" >&2
+                exit 70
+            fi
+            attempt=$((attempt + 1))
+            sleep 1
+        done
     done
     echo "lan-dns: verified UDP and TCP through $verify_ip"
 }
