@@ -1,7 +1,8 @@
 [Unit]
 Description=Split-horizon DNS for lan.domenza.in
-After=network-online.target tailscaled.service
+After=network-online.target tailscaled.service lan-dns-firewall.service
 Wants=network-online.target
+Requires=lan-dns-firewall.service
 
 [Service]
 Type=simple

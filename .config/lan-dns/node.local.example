@@ -6,3 +6,7 @@ LAN_DNS_LAN_INTERFACE=
 
 # Set empty to disable Tailscale listening on a host without Tailscale.
 LAN_DNS_TAILSCALE_INTERFACE=tailscale0
+
+# Set to 1 to restrict IPv6 SSH arriving on the LAN interface to the same
+# link-local and directly connected sources as DNS. Tailscale is unaffected.
+LAN_DNS_RESTRICT_SSH_IPV6=0

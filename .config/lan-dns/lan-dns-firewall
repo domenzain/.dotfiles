@@ -1,0 +1,118 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+config_file=${1:-/etc/lan-dns-firewall.conf}
+
+if [ "$(id -u)" -ne 0 ]; then
+    echo "lan-dns-firewall: must run as root" >&2
+    exit 77
+fi
+if [ ! -r "$config_file" ]; then
+    echo "lan-dns-firewall: missing configuration: $config_file" >&2
+    exit 66
+fi
+
+# shellcheck source=/dev/null
+. "$config_file"
+lan_interface=${LAN_DNS_LAN_INTERFACE:-}
+restrict_ssh_ipv6=${LAN_DNS_RESTRICT_SSH_IPV6:-0}
+case $lan_interface in
+    ''|lo|tailscale0|*[!A-Za-z0-9_.@-]*)
+        echo "lan-dns-firewall: unsafe LAN interface: ${lan_interface:-empty}" >&2
+        exit 65
+        ;;
+esac
+case $restrict_ssh_ipv6 in
+    0|1) ;;
+    *)
+        echo "lan-dns-firewall: LAN_DNS_RESTRICT_SSH_IPV6 must be 0 or 1" >&2
+        exit 65
+        ;;
+esac
+
+ip_command=$(command -v ip) || {
+    echo "lan-dns-firewall: ip command not found" >&2
+    exit 69
+}
+nft_command=$(command -v nft) || {
+    echo "lan-dns-firewall: nft command not found" >&2
+    exit 69
+}
+if ! "$ip_command" link show dev "$lan_interface" >/dev/null 2>&1; then
+    echo "lan-dns-firewall: LAN interface does not exist: $lan_interface" >&2
+    exit 69
+fi
+
+# A route is on-link only when it names this interface without a next-hop.
+# Include SLAAC/RA routes as well as kernel/static direct routes. Host routes,
+# multicast, and link-local are excluded here; link-local is allowed explicitly.
+on_link_prefixes=$(
+    "$ip_command" -6 -o route show table main dev "$lan_interface" |
+        awk '
+            {
+                for (field = 1; field <= NF; field++) {
+                    if ($field == "via") {
+                        next
+                    }
+                }
+                prefix = tolower($1)
+                if (prefix == "default" || prefix !~ /^[0-9a-f:]+\/[0-9]+$/) {
+                    next
+                }
+                split(prefix, parts, "/")
+                prefix_length = parts[2] + 0
+                if (prefix_length <= 0 || prefix_length >= 128 || parts[1] ~ /^fe[89ab]/ || parts[1] ~ /^ff/) {
+                    next
+                }
+                if (!seen[prefix]++) {
+                    print prefix
+                }
+            }
+        '
+)
+
+rules_file=$(mktemp)
+cleanup() {
+    rm -f "$rules_file"
+}
+trap cleanup EXIT HUP INT TERM
+
+{
+    if "$nft_command" list table ip6 lan_dns_guard >/dev/null 2>&1; then
+        echo 'delete table ip6 lan_dns_guard'
+    fi
+    echo 'table ip6 lan_dns_guard {'
+    echo '    chain lan_source {'
+    echo '        ip6 saddr fe80::/10 counter return comment "allow link-local IPv6 source"'
+    for prefix in $on_link_prefixes; do
+        printf '        ip6 saddr %s counter return comment "allow on-link IPv6 source"\n' "$prefix"
+    done
+    echo '        counter drop comment "drop off-link IPv6 source"'
+    echo '    }'
+    echo '    chain input {'
+    echo '        type filter hook input priority 10; policy accept;'
+    printf '        iifname "%s" meta l4proto { tcp, udp } th dport 53 counter jump lan_source\n' "$lan_interface"
+    if [ "$restrict_ssh_ipv6" -eq 1 ]; then
+        printf '        iifname "%s" tcp dport 22 counter jump lan_source\n' "$lan_interface"
+    fi
+    echo '    }'
+    echo '}'
+} > "$rules_file"
+
+# Checking and loading each use a single nft transaction. A refresh therefore
+# never exposes a partially rebuilt chain, and no table owned by another tool
+# is flushed or modified.
+"$nft_command" -c -f "$rules_file"
+"$nft_command" -f "$rules_file"
+"$nft_command" list chain ip6 lan_dns_guard input >/dev/null
+
+if [ -n "$on_link_prefixes" ]; then
+    echo "lan-dns-firewall: allowed link-local and directly connected IPv6 prefixes on $lan_interface"
+else
+    echo "lan-dns-firewall: no directly connected global/ULA prefix yet; allowed link-local IPv6 only on $lan_interface"
+fi
+if [ "$restrict_ssh_ipv6" -eq 1 ]; then
+    echo "lan-dns-firewall: applied the same IPv6 source boundary to LAN SSH"
+fi

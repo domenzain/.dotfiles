@@ -1,0 +1,23 @@
+[Unit]
+Description=Restrict LAN DNS to on-link IPv6 clients
+After=network-online.target
+Wants=network-online.target
+Before=dnsmasq-lan.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/local/libexec/lan-dns-firewall
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+CapabilityBoundingSet=CAP_NET_ADMIN
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+UMask=0077
+TimeoutStartSec=30s

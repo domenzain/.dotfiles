@@ -1,0 +1,13 @@
+[Unit]
+Description=Refresh LAN DNS IPv6 source prefixes
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=5s
+RandomizedDelaySec=5s
+Persistent=true
+Unit=lan-dns-firewall.service
+
+[Install]
+WantedBy=timers.target
