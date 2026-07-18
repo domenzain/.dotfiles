@@ -1,0 +1,8 @@
+# Private, per-host settings. Set the LAN router/resolver address.
+LAN_DNS_UPSTREAM=
+
+# Leave empty to detect the LAN interface from the route to the upstream.
+LAN_DNS_LAN_INTERFACE=
+
+# Set empty to disable Tailscale listening on a host without Tailscale.
+LAN_DNS_TAILSCALE_INTERFACE=tailscale0

@@ -1,0 +1,4 @@
+# Private host records use dnsmasq/addn-hosts syntax:
+# 192.0.2.10 example.lan.domenza.in optional-alias.lan.domenza.in
+#
+# Replace this comment-only template in hosts.local before running setup.
