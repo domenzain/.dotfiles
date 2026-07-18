@@ -205,6 +205,7 @@ install_if_changed() {
 install_if_changed "$hosts_file" /etc/dnsmasq-lan.hosts 0644
 install_if_changed "$candidate_config" /etc/dnsmasq-lan.conf 0644
 install_if_changed "$unit_file" /etc/systemd/system/dnsmasq-lan.service 0644
+run_as_root install -d -m 0755 /usr/local/libexec
 install_if_changed "$firewall_script" /usr/local/libexec/lan-dns-firewall 0755
 install_if_changed "$candidate_firewall_config" /etc/lan-dns-firewall.conf 0600
 install_if_changed "$firewall_unit_file" /etc/systemd/system/lan-dns-firewall.service 0644
