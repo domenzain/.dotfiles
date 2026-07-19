@@ -31,9 +31,19 @@ unit_file=$config_dir/dnsmasq-lan.service
 firewall_script=$config_dir/lan-dns-firewall
 firewall_unit_file=$config_dir/lan-dns-firewall.service
 firewall_timer_file=$config_dir/lan-dns-firewall.timer
+sync_template=$config_dir/sync.local.example
+sync_config=$config_dir/sync.local
+export_script=$config_dir/lan-dns-export
+sync_script=$config_dir/lan-dns-sync
+sync_unit_file=$config_dir/lan-dns-sync.service
+sync_timer_file=$config_dir/lan-dns-sync.timer
+lock_dir=/run/lock/lan-dns
+lock_file=$lock_dir/sync.lock
 
 for required_file in "$local_template" "$hosts_template" "$base_config" "$unit_file" \
-    "$firewall_script" "$firewall_unit_file" "$firewall_timer_file"; do
+    "$firewall_script" "$firewall_unit_file" "$firewall_timer_file" \
+    "$sync_template" "$export_script" "$sync_script" "$sync_unit_file" \
+    "$sync_timer_file"; do
     if [ ! -r "$required_file" ]; then
         echo "lan-dns: missing tracked file: $required_file" >&2
         exit 66
@@ -56,9 +66,14 @@ else
     chmod 600 "$hosts_file"
     echo "lan-dns: preserved existing $hosts_file"
 fi
+if [ -e "$sync_config" ]; then
+    chmod 600 "$sync_config"
+    echo "lan-dns: replication requested by $sync_config"
+fi
 
 if [ "${1:-}" = --init-only ]; then
     echo "lan-dns: customize $local_config and $hosts_file, then rerun $0"
+    echo "lan-dns: optionally copy $sync_template to $sync_config to enable replication"
     exit 0
 fi
 
@@ -97,6 +112,11 @@ case $restrict_ssh_ipv6 in
         ;;
 esac
 
+sync_enabled=0
+if [ -e "$sync_config" ]; then
+    sync_enabled=1
+fi
+
 if ! printf '%s\n' "$upstream" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
     echo "lan-dns: set LAN_DNS_UPSTREAM to an IPv4 address in $local_config" >&2
     exit 65
@@ -134,6 +154,49 @@ if [ -n "$tailscale_interface" ]; then
     esac
 fi
 
+if run_as_root systemctl is-active --quiet dnsmasq.service; then
+    echo "lan-dns: refusing to compete with active dnsmasq.service" >&2
+    exit 73
+fi
+
+need_base_packages=0
+need_sync_packages=0
+if ! command -v dnsmasq >/dev/null 2>&1 || ! command -v dig >/dev/null 2>&1 || \
+    ! command -v nft >/dev/null 2>&1 || ! command -v flock >/dev/null 2>&1; then
+    need_base_packages=1
+fi
+if [ "$sync_enabled" -eq 1 ] && \
+    { ! command -v python3 >/dev/null 2>&1 || ! command -v ssh >/dev/null 2>&1; }; then
+    need_sync_packages=1
+fi
+if [ "$need_base_packages" -eq 1 ] || [ "$need_sync_packages" -eq 1 ]; then
+    run_as_root apt-get update
+fi
+if [ "$need_base_packages" -eq 1 ]; then
+    run_as_root apt-get install -y dnsmasq-base dnsutils nftables util-linux
+fi
+if [ "$need_sync_packages" -eq 1 ]; then
+    run_as_root apt-get install -y openssh-client python3
+fi
+
+sync_mode=none
+if [ "$sync_enabled" -eq 1 ]; then
+    run_as_root python3 "$sync_script" --config "$sync_config" --validate-config
+    sync_mode=$(run_as_root python3 "$sync_script" --config "$sync_config" --print-mode)
+    run_as_root python3 "$sync_script" --config "$sync_config" --validate-hosts "$hosts_file"
+fi
+
+# The root timer and this user-invoked setup share the same advisory lock. Keep
+# its directory root-owned and non-writable; grant only this setup user's
+# primary group permission to open the otherwise data-free lock file.
+lock_group=$(id -g)
+run_as_root install -d -o root -g "$lock_group" -m 0750 "$lock_dir"
+run_as_root touch "$lock_file"
+run_as_root chown root:"$lock_group" "$lock_file"
+run_as_root chmod 0660 "$lock_file"
+exec 9>>"$lock_file"
+flock -x 9
+
 expected_ip=$(awk '
     $1 !~ /^#/ {
         if (NF >= 2) {
@@ -146,16 +209,6 @@ verify_name=$(awk '$1 !~ /^#/ && NF >= 2 { print $2; exit }' "$hosts_file")
 if [ -z "$expected_ip" ] || [ -z "$verify_name" ]; then
     echo "lan-dns: add at least one private record to $hosts_file" >&2
     exit 65
-fi
-
-if run_as_root systemctl is-active --quiet dnsmasq.service; then
-    echo "lan-dns: refusing to compete with active dnsmasq.service" >&2
-    exit 73
-fi
-
-if ! command -v dnsmasq >/dev/null 2>&1 || ! command -v dig >/dev/null 2>&1 || ! command -v nft >/dev/null 2>&1; then
-    run_as_root apt-get update
-    run_as_root apt-get install -y dnsmasq-base dnsutils nftables
 fi
 
 tmp_dir=$(mktemp -d)
@@ -188,6 +241,9 @@ candidate_firewall_config=$tmp_dir/lan-dns-firewall.conf
 sh -n "$firewall_script"
 if command -v systemd-analyze >/dev/null 2>&1; then
     systemd-analyze verify "$unit_file" "$firewall_unit_file" "$firewall_timer_file"
+    if [ "$sync_mode" = replica ]; then
+        systemd-analyze verify "$sync_unit_file" "$sync_timer_file"
+    fi
 fi
 
 changed=0
@@ -210,6 +266,16 @@ install_if_changed "$firewall_script" /usr/local/libexec/lan-dns-firewall 0755
 install_if_changed "$candidate_firewall_config" /etc/lan-dns-firewall.conf 0600
 install_if_changed "$firewall_unit_file" /etc/systemd/system/lan-dns-firewall.service 0644
 install_if_changed "$firewall_timer_file" /etc/systemd/system/lan-dns-firewall.timer 0644
+if [ "$sync_enabled" -eq 1 ]; then
+    install_if_changed "$export_script" /usr/local/libexec/lan-dns-export 0755
+    if [ "$sync_mode" = replica ]; then
+        install_if_changed "$sync_script" /usr/local/libexec/lan-dns-sync 0755
+        install_if_changed "$sync_config" /etc/lan-dns-sync.conf 0600
+        run_as_root chmod 0600 /etc/lan-dns-sync.conf
+        install_if_changed "$sync_unit_file" /etc/systemd/system/lan-dns-sync.service 0644
+        install_if_changed "$sync_timer_file" /etc/systemd/system/lan-dns-sync.timer 0644
+    fi
+fi
 
 if [ "$changed" -eq 1 ]; then
     run_as_root systemctl daemon-reload
@@ -270,6 +336,21 @@ if [ -n "$tailscale_interface" ] && ip link show dev "$tailscale_interface" >/de
     done
 else
     echo "lan-dns: Tailscale interface absent or disabled; LAN-only service is healthy"
+fi
+
+# Do not invoke the pull service while setup still owns their shared lock.
+flock -u 9
+
+if [ "$sync_mode" = replica ]; then
+    run_as_root systemctl enable --now lan-dns-sync.timer
+    if ! run_as_root systemctl start lan-dns-sync.service; then
+        echo 'lan-dns: initial replication failed; the timer will retry and last-good records remain active' >&2
+    fi
+elif [ "$sync_mode" = source ]; then
+    # Switching a configured node from replica to source must stop an old pull
+    # timer. A fresh source has no such unit, hence the deliberately quiet no-op.
+    run_as_root systemctl disable --now lan-dns-sync.timer >/dev/null 2>&1 || true
+    echo 'lan-dns: source exporter installed; authorize its forced command separately'
 fi
 
 echo "lan-dns: setup complete on $lan_interface"

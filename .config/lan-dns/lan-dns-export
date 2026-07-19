@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -eu
+
+# A forced command receives the command requested by the client in
+# SSH_ORIGINAL_COMMAND. Refuse to become a generic command trampoline.
+case ${SSH_ORIGINAL_COMMAND:-} in
+    ''|lan-dns-export) ;;
+    *)
+        echo 'lan-dns-export: unsupported command' >&2
+        exit 64
+        ;;
+esac
+
+if [ "$#" -ne 0 ]; then
+    echo 'usage: lan-dns-export' >&2
+    exit 64
+fi
+
+hosts_file=/etc/dnsmasq-lan.hosts
+if [ ! -f "$hosts_file" ] || [ ! -r "$hosts_file" ]; then
+    echo 'lan-dns-export: live hosts file is unavailable' >&2
+    exit 66
+fi
+
+exec /bin/cat "$hosts_file"

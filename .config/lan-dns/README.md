@@ -53,10 +53,55 @@ the full workstation bootstrap is unnecessary.
 
 ## Resilient topology
 
-Run byte-identical private `hosts.local` files on both resolver nodes. DHCP and
-Tailscale clients do not reliably preserve primary/secondary order, so treat
-the pair as active-active. Advertise both reserved LAN addresses through DHCP
-and add both Tailscale addresses as restricted nameservers for the private
-zone, enabling “Use with exit node” for each. If records return LAN addresses,
-both nodes must also advertise the same Tailscale subnet route so DNS failover
-preserves reachability.
+DHCP and Tailscale clients do not reliably preserve primary/secondary order, so
+treat the resolver pair as active-active. Advertise both reserved LAN addresses
+through DHCP and add both Tailscale addresses as restricted nameservers for the
+private zone, enabling “Use with exit node” for each. If records return LAN
+addresses, both nodes must also advertise the same Tailscale subnet route so
+DNS failover preserves reachability.
+
+The optional replication helper keeps the active-active resolvers on the same
+record set without making DNS availability depend on the source. One curated
+source owns `hosts.local`; a replica pulls the source's live
+`/etc/dnsmasq-lan.hosts` over pinned, key-only SSH about once a minute. If the
+source, SSH, validation, reload, or verification fails, the replica continues
+serving its last-good file and the timer tries again later.
+
+Replication is deliberately inert unless the ignored, mode-`0600`
+`sync.local` exists. Start from `sync.local.example` and select one role:
+
+- `LAN_DNS_SYNC_MODE=source` plus `LAN_DNS_SYNC_ZONE` validates the curated
+  source file and installs the root-owned `lan-dns-export` helper.
+- `LAN_DNS_SYNC_MODE=replica` additionally installs and enables the pull
+  service and timer. All replica keys shown in the example are required.
+
+On the source, authorize a dedicated replica public key with an OpenSSH forced
+command. The account needs no sudo access because the exported live file is
+readable; the helper itself is installed root-owned:
+
+```text
+restrict,command="/usr/local/libexec/lan-dns-export" ssh-ed25519 REPLICA_PUBLIC_KEY
+```
+
+The replica's identity file must be inaccessible to group and others. Its
+`known_hosts` file must contain a host key verified out of band; setup never
+uses `ssh-keyscan` or accepts a new host key. Configure the source by an address
+that does not depend on the private DNS being synchronized. The verification
+server must likewise be a literal address on the replica itself.
+
+The puller accepts at most 64 KiB of ASCII hosts data. Every non-comment line
+must contain a canonical IP address followed by one or more lowercase FQDNs at
+or below `LAN_DNS_SYNC_ZONE`. It rejects empty files, inline comments,
+non-canonical addresses, out-of-zone names, and two different addresses of the
+same family for one name. A name may validly have both an IPv4 and IPv6 record.
+
+After validation, the puller compares the candidate with both the live file and
+the configured user `hosts.local` shadow. It preserves their ownership and
+modes while replacing changed files atomically, reloads dnsmasq with SIGHUP,
+and queries every A/AAAA record directly through the configured replica server.
+Any failed update restores both previous files and reloads the last-good data.
+Setup and the timer use the same `flock`, so an update cannot race a setup run.
+
+All addresses, usernames, record data, key paths, and pinned-host paths stay in
+ignored local files. Only generic programs, units, and documentation belong in
+the public repository.

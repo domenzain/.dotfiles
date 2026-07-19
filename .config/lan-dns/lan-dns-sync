@@ -1,0 +1,443 @@
+#!/usr/bin/python3
+"""Safely pull and install a dnsmasq addn-hosts file from a peer."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import ipaddress
+import os
+from pathlib import Path
+import re
+import resource
+import shlex
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+
+
+CONFIG_KEYS = {
+    "LAN_DNS_SYNC_MODE",
+    "LAN_DNS_SYNC_ZONE",
+    "LAN_DNS_SYNC_SOURCE_HOST",
+    "LAN_DNS_SYNC_SOURCE_PORT",
+    "LAN_DNS_SYNC_SOURCE_USER",
+    "LAN_DNS_SYNC_IDENTITY_FILE",
+    "LAN_DNS_SYNC_KNOWN_HOSTS_FILE",
+    "LAN_DNS_SYNC_SHADOW_FILE",
+    "LAN_DNS_SYNC_VERIFY_SERVER",
+}
+REPLICA_KEYS = CONFIG_KEYS - {"LAN_DNS_SYNC_MODE"}
+SOURCE_KEYS = {"LAN_DNS_SYNC_MODE", "LAN_DNS_SYNC_ZONE"}
+MAX_HOSTS_BYTES = 64 * 1024
+LOCK_FILE = Path("/run/lock/lan-dns/sync.lock")
+LIVE_FILE = Path("/etc/dnsmasq-lan.hosts")
+LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+USER_RE = re.compile(r"^[a-z_][a-z0-9_-]{0,31}$")
+HOST_RE = re.compile(r"^[A-Za-z0-9._:%-]+$")
+
+
+class SyncError(RuntimeError):
+    """An expected, safely handled synchronization failure."""
+
+
+def parse_config(path: Path) -> dict[str, str]:
+    try:
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SyncError(f"config is not a regular file: {path}")
+        if stat.S_IMODE(metadata.st_mode) != 0o600:
+            raise SyncError(f"config must have mode 0600: {path}")
+        raw_lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise SyncError(f"cannot read config {path}: {exc}") from exc
+
+    config: dict[str, str] = {}
+    for line_number, raw_line in enumerate(raw_lines, 1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            raise SyncError(f"config line {line_number} is not KEY=value")
+        key, encoded_value = line.split("=", 1)
+        key = key.strip()
+        if key not in CONFIG_KEYS:
+            raise SyncError(f"unknown config key on line {line_number}: {key}")
+        if key in config:
+            raise SyncError(f"duplicate config key on line {line_number}: {key}")
+        try:
+            values = shlex.split(encoded_value, comments=True, posix=True)
+        except ValueError as exc:
+            raise SyncError(f"invalid quoting on config line {line_number}") from exc
+        if len(values) > 1:
+            raise SyncError(f"config line {line_number} must contain one value")
+        config[key] = values[0] if values else ""
+
+    mode = config.get("LAN_DNS_SYNC_MODE", "")
+    if mode not in {"source", "replica"}:
+        raise SyncError("LAN_DNS_SYNC_MODE must be source or replica")
+    if mode == "source":
+        missing = sorted(key for key in SOURCE_KEYS if not config.get(key))
+        if missing:
+            raise SyncError("missing source config keys: " + ", ".join(missing))
+        extras = sorted(set(config) - SOURCE_KEYS)
+        if extras:
+            raise SyncError("source mode does not accept replica settings")
+        validate_dns_name(config["LAN_DNS_SYNC_ZONE"], description="zone")
+        return config
+
+    missing = sorted(key for key in REPLICA_KEYS if not config.get(key))
+    if missing:
+        raise SyncError("missing replica config keys: " + ", ".join(missing))
+    validate_replica_config(config)
+    return config
+
+
+def validate_dns_name(name: str, *, description: str) -> None:
+    if name != name.lower() or len(name) > 253 or name.endswith("."):
+        raise SyncError(f"invalid {description}: {name!r}")
+    labels = name.split(".")
+    if len(labels) < 2 or any(not LABEL_RE.fullmatch(label) for label in labels):
+        raise SyncError(f"invalid {description}: {name!r}")
+
+
+def validate_replica_config(config: dict[str, str]) -> None:
+    zone = config["LAN_DNS_SYNC_ZONE"]
+    validate_dns_name(zone, description="zone")
+
+    source_host = config["LAN_DNS_SYNC_SOURCE_HOST"]
+    if not HOST_RE.fullmatch(source_host) or source_host.startswith("-"):
+        raise SyncError("LAN_DNS_SYNC_SOURCE_HOST contains unsafe characters")
+    source_user = config["LAN_DNS_SYNC_SOURCE_USER"]
+    if not USER_RE.fullmatch(source_user):
+        raise SyncError("LAN_DNS_SYNC_SOURCE_USER is invalid")
+    try:
+        port = int(config["LAN_DNS_SYNC_SOURCE_PORT"])
+    except ValueError as exc:
+        raise SyncError("LAN_DNS_SYNC_SOURCE_PORT is not an integer") from exc
+    if not 1 <= port <= 65535:
+        raise SyncError("LAN_DNS_SYNC_SOURCE_PORT is outside 1..65535")
+
+    for key in (
+        "LAN_DNS_SYNC_IDENTITY_FILE",
+        "LAN_DNS_SYNC_KNOWN_HOSTS_FILE",
+        "LAN_DNS_SYNC_SHADOW_FILE",
+    ):
+        value = config[key]
+        if not value.startswith("/") or "\x00" in value or "\n" in value:
+            raise SyncError(f"{key} must be a safe absolute path")
+
+    try:
+        ipaddress.ip_address(config["LAN_DNS_SYNC_VERIFY_SERVER"])
+    except ValueError as exc:
+        raise SyncError("LAN_DNS_SYNC_VERIFY_SERVER must be an IP address") from exc
+
+
+def validate_runtime_files(config: dict[str, str]) -> None:
+    identity = Path(config["LAN_DNS_SYNC_IDENTITY_FILE"])
+    known_hosts = Path(config["LAN_DNS_SYNC_KNOWN_HOSTS_FILE"])
+    shadow = Path(config["LAN_DNS_SYNC_SHADOW_FILE"])
+
+    for path, description in (
+        (identity, "identity"),
+        (known_hosts, "known-hosts"),
+        (shadow, "shadow hosts"),
+        (LIVE_FILE, "live hosts"),
+    ):
+        try:
+            metadata = path.lstat()
+        except OSError as exc:
+            raise SyncError(f"{description} file is unavailable: {path}: {exc}") from exc
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SyncError(f"{description} path is not a regular file: {path}")
+
+    identity_mode = stat.S_IMODE(identity.stat().st_mode)
+    if identity_mode & 0o077:
+        raise SyncError("identity file must not be accessible by group or others")
+    if known_hosts.stat().st_size == 0:
+        raise SyncError("known-hosts file is empty")
+
+
+def limit_output_file() -> None:
+    resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_HOSTS_BYTES + 1,) * 2)
+
+
+def pull_hosts(config: dict[str, str], destination: Path) -> bytes:
+    ssh = [
+        "/usr/bin/ssh",
+        "-T",
+        "-oBatchMode=yes",
+        "-oIdentitiesOnly=yes",
+        "-oStrictHostKeyChecking=yes",
+        "-oGlobalKnownHostsFile=/dev/null",
+        f"-oUserKnownHostsFile={config['LAN_DNS_SYNC_KNOWN_HOSTS_FILE']}",
+        f"-oIdentityFile={config['LAN_DNS_SYNC_IDENTITY_FILE']}",
+        "-oConnectTimeout=10",
+        "-oConnectionAttempts=1",
+        "-p",
+        config["LAN_DNS_SYNC_SOURCE_PORT"],
+        f"{config['LAN_DNS_SYNC_SOURCE_USER']}@{config['LAN_DNS_SYNC_SOURCE_HOST']}",
+        "lan-dns-export",
+    ]
+    try:
+        with destination.open("wb") as output:
+            completed = subprocess.run(
+                ssh,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                preexec_fn=limit_output_file,
+            )
+    except OSError as exc:
+        raise SyncError(f"could not start SSH export: {exc}") from exc
+    if completed.returncode != 0:
+        raise SyncError(f"SSH export failed with status {completed.returncode}")
+    try:
+        data = destination.read_bytes()
+    except OSError as exc:
+        raise SyncError(f"could not read staged export: {exc}") from exc
+    if len(data) > MAX_HOSTS_BYTES:
+        raise SyncError(f"export exceeds {MAX_HOSTS_BYTES} bytes")
+    return data
+
+
+def validate_hosts(data: bytes, zone: str) -> list[tuple[ipaddress._BaseAddress, str]]:
+    if not data:
+        raise SyncError("exported hosts file is empty")
+    if not data.endswith(b"\n"):
+        raise SyncError("exported hosts file must end with a newline")
+    try:
+        text = data.decode("ascii")
+    except UnicodeDecodeError as exc:
+        raise SyncError("exported hosts file is not ASCII") from exc
+
+    records: list[tuple[ipaddress._BaseAddress, str]] = []
+    names: dict[tuple[str, int], ipaddress._BaseAddress] = {}
+    for line_number, raw_line in enumerate(text.splitlines(), 1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "#" in line:
+            raise SyncError(f"inline comments are not allowed on hosts line {line_number}")
+        fields = line.split()
+        if len(fields) < 2:
+            raise SyncError(f"empty record on hosts line {line_number}")
+        try:
+            address = ipaddress.ip_address(fields[0])
+        except ValueError as exc:
+            raise SyncError(f"invalid IP address on hosts line {line_number}") from exc
+        if str(address) != fields[0]:
+            raise SyncError(f"IP address is not canonical on hosts line {line_number}")
+
+        for name in fields[1:]:
+            validate_dns_name(name, description=f"name on hosts line {line_number}")
+            if name != zone and not name.endswith("." + zone):
+                raise SyncError(f"out-of-zone name on hosts line {line_number}: {name}")
+            key = (name, address.version)
+            previous = names.get(key)
+            if previous is not None and previous != address:
+                raise SyncError(f"conflicting address for {name} on hosts line {line_number}")
+            names[key] = address
+            records.append((address, name))
+
+    if not records:
+        raise SyncError("exported hosts file contains no records")
+    return records
+
+
+def target_state(path: Path) -> tuple[bytes, os.stat_result]:
+    try:
+        metadata = path.lstat()
+        if not stat.S_ISREG(metadata.st_mode):
+            raise SyncError(f"target is not a regular file: {path}")
+        return path.read_bytes(), metadata
+    except OSError as exc:
+        raise SyncError(f"cannot read target {path}: {exc}") from exc
+
+
+def atomic_replace(path: Path, data: bytes, metadata: os.stat_result) -> None:
+    temporary_fd = -1
+    temporary_name = ""
+    try:
+        temporary_fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        os.fchmod(temporary_fd, stat.S_IMODE(metadata.st_mode))
+        os.fchown(temporary_fd, metadata.st_uid, metadata.st_gid)
+        with os.fdopen(temporary_fd, "wb", closefd=True) as output:
+            temporary_fd = -1
+            output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        os.replace(temporary_name, path)
+        temporary_name = ""
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    except OSError as exc:
+        raise SyncError(f"atomic update failed for {path}: {exc}") from exc
+    finally:
+        if temporary_fd >= 0:
+            os.close(temporary_fd)
+        if temporary_name:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
+
+
+def systemctl(*arguments: str) -> None:
+    try:
+        completed = subprocess.run(
+            ["/bin/systemctl", *arguments],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except OSError as exc:
+        raise SyncError(f"could not run systemctl {' '.join(arguments)}: {exc}") from exc
+    if completed.returncode != 0:
+        raise SyncError(f"systemctl {' '.join(arguments)} failed")
+
+
+def verify_records(
+    records: list[tuple[ipaddress._BaseAddress, str]], verify_server: str
+) -> None:
+    for address, name in records:
+        query_type = "A" if address.version == 4 else "AAAA"
+        matched = False
+        for attempt in range(3):
+            try:
+                completed = subprocess.run(
+                    [
+                        "/usr/bin/dig",
+                        "+short",
+                        "+time=2",
+                        "+tries=1",
+                        f"@{verify_server}",
+                        name,
+                        query_type,
+                    ],
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    text=True,
+                    check=False,
+                )
+            except OSError as exc:
+                raise SyncError(f"could not run dig: {exc}") from exc
+            for answer in completed.stdout.splitlines():
+                try:
+                    if ipaddress.ip_address(answer.strip()) == address:
+                        matched = True
+                        break
+                except ValueError:
+                    continue
+            if matched:
+                break
+            if attempt < 2:
+                time.sleep(1)
+        if not matched:
+            raise SyncError(f"DNS verification failed for {name} {query_type}")
+
+
+def synchronize(config: dict[str, str]) -> bool:
+    if os.geteuid() != 0:
+        raise SyncError("replica synchronization must run as root")
+    validate_runtime_files(config)
+    shadow_path = Path(config["LAN_DNS_SYNC_SHADOW_FILE"])
+
+    LOCK_FILE.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    with LOCK_FILE.open("a+b") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        with tempfile.TemporaryDirectory(prefix="lan-dns-sync-") as temporary_dir:
+            candidate_path = Path(temporary_dir) / "hosts"
+            candidate = pull_hosts(config, candidate_path)
+            records = validate_hosts(candidate, config["LAN_DNS_SYNC_ZONE"])
+
+        live_data, live_metadata = target_state(LIVE_FILE)
+        shadow_data, shadow_metadata = target_state(shadow_path)
+        live_changed = candidate != live_data
+        shadow_changed = candidate != shadow_data
+        if not live_changed and not shadow_changed:
+            verify_records(records, config["LAN_DNS_SYNC_VERIFY_SERVER"])
+            return False
+
+        try:
+            if live_changed:
+                atomic_replace(LIVE_FILE, candidate, live_metadata)
+            if shadow_changed:
+                atomic_replace(shadow_path, candidate, shadow_metadata)
+            if live_changed:
+                systemctl("reload", "dnsmasq-lan.service")
+            verify_records(records, config["LAN_DNS_SYNC_VERIFY_SERVER"])
+        except SyncError as update_error:
+            rollback_errors: list[str] = []
+            if live_changed:
+                try:
+                    atomic_replace(LIVE_FILE, live_data, live_metadata)
+                except SyncError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if shadow_changed:
+                try:
+                    atomic_replace(shadow_path, shadow_data, shadow_metadata)
+                except SyncError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            if live_changed:
+                try:
+                    systemctl("reload", "dnsmasq-lan.service")
+                except SyncError as rollback_error:
+                    rollback_errors.append(str(rollback_error))
+            detail = f"update rejected and last-good restored: {update_error}"
+            if rollback_errors:
+                detail += "; rollback error: " + "; ".join(rollback_errors)
+            raise SyncError(detail) from update_error
+        return True
+
+
+def parse_arguments() -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=Path, default=Path("/etc/lan-dns-sync.conf"))
+    action = parser.add_mutually_exclusive_group()
+    action.add_argument("--validate-config", action="store_true")
+    action.add_argument("--print-mode", action="store_true")
+    action.add_argument("--validate-hosts", type=Path)
+    return parser.parse_args()
+
+
+def main() -> int:
+    arguments = parse_arguments()
+    try:
+        config = parse_config(arguments.config)
+        if arguments.print_mode:
+            print(config["LAN_DNS_SYNC_MODE"])
+            return 0
+        if arguments.validate_config:
+            return 0
+        if arguments.validate_hosts is not None:
+            try:
+                data = arguments.validate_hosts.read_bytes()
+            except OSError as exc:
+                raise SyncError(
+                    f"cannot read hosts file {arguments.validate_hosts}: {exc}"
+                ) from exc
+            if len(data) > MAX_HOSTS_BYTES:
+                raise SyncError(f"hosts file exceeds {MAX_HOSTS_BYTES} bytes")
+            validate_hosts(data, config["LAN_DNS_SYNC_ZONE"])
+            return 0
+        if config["LAN_DNS_SYNC_MODE"] != "replica":
+            raise SyncError("synchronization can run only with replica mode")
+        changed = synchronize(config)
+        print("lan-dns-sync: records updated" if changed else "lan-dns-sync: already current")
+        return 0
+    except SyncError as exc:
+        print(f"lan-dns-sync: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

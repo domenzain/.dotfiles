@@ -1,0 +1,15 @@
+# Optional private replication settings. Copy to sync.local on a source:
+LAN_DNS_SYNC_MODE=source
+LAN_DNS_SYNC_ZONE=lan.example.invalid
+
+# Or replace the file with all of these settings on a replica. Values below are
+# documentation placeholders and must not be used as real configuration.
+# LAN_DNS_SYNC_MODE=replica
+# LAN_DNS_SYNC_ZONE=lan.example.invalid
+# LAN_DNS_SYNC_SOURCE_HOST=192.0.2.10
+# LAN_DNS_SYNC_SOURCE_PORT=22
+# LAN_DNS_SYNC_SOURCE_USER=lan-dns-sync
+# LAN_DNS_SYNC_IDENTITY_FILE=/root/.ssh/lan-dns-sync
+# LAN_DNS_SYNC_KNOWN_HOSTS_FILE=/root/.ssh/lan-dns-sync-known-hosts
+# LAN_DNS_SYNC_SHADOW_FILE=/home/example/.config/lan-dns/hosts.local
+# LAN_DNS_SYNC_VERIFY_SERVER=192.0.2.11

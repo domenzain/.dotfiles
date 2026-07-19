@@ -1,0 +1,24 @@
+[Unit]
+Description=Pull and verify split-horizon DNS records
+After=network-online.target dnsmasq-lan.service tailscaled.service
+Wants=network-online.target
+Requires=dnsmasq-lan.service
+ConditionPathExists=/etc/lan-dns-sync.conf
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/libexec/lan-dns-sync --config /etc/lan-dns-sync.conf
+User=root
+Group=root
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHostname=true
+ProtectClock=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
