@@ -241,9 +241,6 @@ candidate_firewall_config=$tmp_dir/lan-dns-firewall.conf
 sh -n "$firewall_script"
 if command -v systemd-analyze >/dev/null 2>&1; then
     systemd-analyze verify "$unit_file" "$firewall_unit_file" "$firewall_timer_file"
-    if [ "$sync_mode" = replica ]; then
-        systemd-analyze verify "$sync_unit_file" "$sync_timer_file"
-    fi
 fi
 
 changed=0
@@ -274,6 +271,11 @@ if [ "$sync_enabled" -eq 1 ]; then
         run_as_root chmod 0600 /etc/lan-dns-sync.conf
         install_if_changed "$sync_unit_file" /etc/systemd/system/lan-dns-sync.service 0644
         install_if_changed "$sync_timer_file" /etc/systemd/system/lan-dns-sync.timer 0644
+        if command -v systemd-analyze >/dev/null 2>&1; then
+            # The unit references the installed absolute executable path, so
+            # verify it only after that root-owned helper exists.
+            systemd-analyze verify "$sync_unit_file" "$sync_timer_file"
+        fi
     fi
 fi
 
