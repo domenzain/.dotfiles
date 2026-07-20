@@ -37,13 +37,14 @@ export_script=$config_dir/lan-dns-export
 sync_script=$config_dir/lan-dns-sync
 sync_unit_file=$config_dir/lan-dns-sync.service
 sync_timer_file=$config_dir/lan-dns-sync.timer
+tailscale_ssh_unit_file=$config_dir/lan-dns-tailscale-ssh.service
 lock_dir=/run/lock/lan-dns
 lock_file=$lock_dir/sync.lock
 
 for required_file in "$local_template" "$hosts_template" "$base_config" "$unit_file" \
     "$firewall_script" "$firewall_unit_file" "$firewall_timer_file" \
     "$sync_template" "$export_script" "$sync_script" "$sync_unit_file" \
-    "$sync_timer_file"; do
+    "$sync_timer_file" "$tailscale_ssh_unit_file"; do
     if [ ! -r "$required_file" ]; then
         echo "lan-dns: missing tracked file: $required_file" >&2
         exit 66
@@ -185,6 +186,10 @@ if [ "$sync_enabled" -eq 1 ]; then
     sync_mode=$(run_as_root python3 "$sync_script" --config "$sync_config" --print-mode)
     run_as_root python3 "$sync_script" --config "$sync_config" --validate-hosts "$hosts_file"
 fi
+if [ "$sync_mode" = source ] && ! command -v tailscale >/dev/null 2>&1; then
+    echo 'lan-dns: source mode requires the Tailscale CLI' >&2
+    exit 69
+fi
 
 # The root timer and this user-invoked setup share the same advisory lock. Keep
 # its directory root-owned and non-writable; grant only this setup user's
@@ -241,6 +246,9 @@ candidate_firewall_config=$tmp_dir/lan-dns-firewall.conf
 sh -n "$firewall_script"
 if command -v systemd-analyze >/dev/null 2>&1; then
     systemd-analyze verify "$unit_file" "$firewall_unit_file" "$firewall_timer_file"
+    if [ "$sync_mode" = source ]; then
+        systemd-analyze verify "$tailscale_ssh_unit_file"
+    fi
 fi
 
 changed=0
@@ -276,6 +284,8 @@ if [ "$sync_enabled" -eq 1 ]; then
             # verify it only after that root-owned helper exists.
             systemd-analyze verify "$sync_unit_file" "$sync_timer_file"
         fi
+    elif [ "$sync_mode" = source ]; then
+        install_if_changed "$tailscale_ssh_unit_file" /etc/systemd/system/lan-dns-tailscale-ssh.service 0644
     fi
 fi
 
@@ -344,6 +354,7 @@ fi
 flock -u 9
 
 if [ "$sync_mode" = replica ]; then
+    run_as_root systemctl disable --now lan-dns-tailscale-ssh.service >/dev/null 2>&1 || true
     run_as_root systemctl enable --now lan-dns-sync.timer
     if ! run_as_root systemctl start lan-dns-sync.service; then
         echo 'lan-dns: initial replication failed; the timer will retry and last-good records remain active' >&2
@@ -352,7 +363,12 @@ elif [ "$sync_mode" = source ]; then
     # Switching a configured node from replica to source must stop an old pull
     # timer. A fresh source has no such unit, hence the deliberately quiet no-op.
     run_as_root systemctl disable --now lan-dns-sync.timer >/dev/null 2>&1 || true
-    echo 'lan-dns: source exporter installed; authorize its forced command separately'
+    run_as_root systemctl enable lan-dns-tailscale-ssh.service
+    run_as_root systemctl --no-block start lan-dns-tailscale-ssh.service
+    echo 'lan-dns: source exporter installed; Tailscale SSH will enable after tailnet authentication'
+    echo 'lan-dns: authorize the replica forced command and Tailscale SSH policy separately'
+else
+    run_as_root systemctl disable --now lan-dns-tailscale-ssh.service >/dev/null 2>&1 || true
 fi
 
 echo "lan-dns: setup complete on $lan_interface"

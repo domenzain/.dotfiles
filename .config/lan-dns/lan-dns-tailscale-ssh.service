@@ -1,0 +1,19 @@
+[Unit]
+Description=Enable Tailscale SSH for the LAN DNS source
+Documentation=https://tailscale.com/docs/features/tailscale-ssh
+Wants=network-online.target tailscaled.service
+After=network-online.target tailscaled.service
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/tailscale ip -4
+ExecStart=/usr/bin/tailscale set --ssh
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=30s
+TimeoutStartSec=30s
+StandardOutput=null
+
+[Install]
+WantedBy=multi-user.target

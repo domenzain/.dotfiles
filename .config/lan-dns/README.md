@@ -71,7 +71,8 @@ Replication is deliberately inert unless the ignored, mode-`0600`
 `sync.local` exists. Start from `sync.local.example` and select one role:
 
 - `LAN_DNS_SYNC_MODE=source` plus `LAN_DNS_SYNC_ZONE` validates the curated
-  source file and installs the root-owned `lan-dns-export` helper.
+  source file, installs the root-owned `lan-dns-export` helper, and enables a
+  retrying oneshot that runs `tailscale set --ssh` after tailnet authentication.
 - `LAN_DNS_SYNC_MODE=replica` additionally installs and enables the pull
   service and timer. All replica keys shown in the example are required.
 
@@ -82,6 +83,10 @@ readable; the helper itself is installed root-owned:
 ```text
 restrict,command="/usr/local/libexec/lan-dns-export" ssh-ed25519 REPLICA_PUBLIC_KEY
 ```
+
+The source-role oneshot is safe to install from cloud-init before the node is
+authenticated: it waits for a Tailscale address and retries without embedding
+an auth key. Tailscale SSH access policy remains a separate tailnet setting.
 
 The replica's identity file must be inaccessible to group and others. Its
 `known_hosts` file must contain a host key verified out of band; setup never
