@@ -18,10 +18,14 @@ case $action in
     *) usage ;;
 esac
 
-if [ "$(uname -s)" != Linux ]; then
-    echo "codex: this setup currently supports Linux hosts only" >&2
-    exit 69
-fi
+os=$(uname -s)
+case $os in
+    Linux|Darwin) ;;
+    *)
+        echo "codex: unsupported service manager on $os" >&2
+        exit 69
+        ;;
+esac
 
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 config_dir=$config_home/codex
@@ -29,14 +33,36 @@ unit_dir=$config_home/systemd/user
 service=codex-remote-control.service
 unit_template=$config_dir/systemd/$service
 unit_link=$unit_dir/$service
+label=io.codex.remote-control
+plist_template=$config_dir/launchd/$label.plist
+launch_agents_dir=$HOME/Library/LaunchAgents
+plist_installed=$launch_agents_dir/$label.plist
 codex_home=${CODEX_HOME:-"$HOME/.codex"}
 codex_bin=$codex_home/packages/standalone/current/bin/codex
 
 require_systemd() {
     if ! command -v systemctl >/dev/null 2>&1; then
-        echo "codex: systemctl is required for service actions" >&2
+        echo "codex: systemctl is required for Linux service actions" >&2
         exit 69
     fi
+}
+
+require_launchd() {
+    if ! command -v launchctl >/dev/null 2>&1; then
+        echo "codex: launchctl is required for macOS service actions" >&2
+        exit 69
+    fi
+}
+
+require_service_manager() {
+    case $os in
+        Linux) require_systemd ;;
+        Darwin) require_launchd ;;
+        *)
+            echo "codex: unsupported service manager on $os" >&2
+            exit 69
+            ;;
+    esac
 }
 
 install_codex() {
@@ -99,6 +125,65 @@ remove_unit() {
     rm -f "$unit_link"
 }
 
+install_plist() {
+    if [ ! -r "$plist_template" ]; then
+        echo "codex: missing tracked launchd template: $plist_template" >&2
+        exit 66
+    fi
+    mkdir -p "$launch_agents_dir"
+    install -m 600 "$plist_template" "$plist_installed"
+}
+
+remove_plist() {
+    rm -f "$plist_installed"
+}
+
+launchd_domain() {
+    printf 'gui/%s\n' "$(id -u)"
+}
+
+launchd_target() {
+    printf '%s/%s\n' "$(launchd_domain)" "$label"
+}
+
+launchd_is_loaded() {
+    launchctl print "$(launchd_target)" >/dev/null 2>&1
+}
+
+launchd_is_running() {
+    print_out=$(launchctl print "$(launchd_target)" 2>/dev/null || true)
+    case $print_out in
+        *"state = running"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+wait_for_launchd_unload() {
+    target=$(launchd_target)
+    attempts=0
+    while launchctl print "$target" >/dev/null 2>&1; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 300 ]; then
+            echo "codex: timed out waiting for launchd to unload $target" >&2
+            exit 75
+        fi
+        sleep 0.1
+    done
+}
+
+bootout_launchd() {
+    target=$(launchd_target)
+    if launchctl print "$target" >/dev/null 2>&1; then
+        launchctl bootout "$target" || true
+    fi
+    wait_for_launchd_unload
+}
+
+bootstrap_launchd() {
+    launchctl enable "$(launchd_target)" >/dev/null 2>&1 || true
+    launchctl bootstrap "$(launchd_domain)" "$plist_installed"
+}
+
 remove_legacy_watcher() {
     systemctl --user disable --now codex-binary.path \
         codex-binary-restart.service >/dev/null 2>&1 || true
@@ -106,7 +191,7 @@ remove_legacy_watcher() {
     rm -f "$unit_dir/codex-binary-restart.service"
 }
 
-wait_for_service() {
+wait_for_service_linux() {
     attempts=0
     while ! "$codex_bin" app-server daemon version >/dev/null 2>&1; do
         attempts=$((attempts + 1))
@@ -119,20 +204,60 @@ wait_for_service() {
     done
 }
 
+wait_for_service_darwin() {
+    attempts=0
+    while ! "$codex_bin" app-server daemon version >/dev/null 2>&1; do
+        attempts=$((attempts + 1))
+        if ! launchd_is_running || [ "$attempts" -ge 80 ]; then
+            echo "codex: app-server did not become ready" >&2
+            launchctl print "$(launchd_target)" >&2 || true
+            exit 75
+        fi
+        sleep 0.25
+    done
+}
+
+service_is_running() {
+    case $os in
+        Linux) systemctl --user is-active --quiet "$service" ;;
+        Darwin) launchd_is_running ;;
+        *) return 1 ;;
+    esac
+}
+
 request_graceful_restart() {
-    if systemctl --user is-active --quiet "$service"; then
-        # Codex handles SIGHUP by draining every running assistant turn before
-        # exiting. Restart=always then launches the installed binary.
-        systemctl --user kill --kill-who=main --signal=SIGHUP "$service"
-        echo "codex: graceful restart requested; active turns will finish first"
-    else
-        systemctl --user start "$service"
-        wait_for_service
-    fi
+    case $os in
+        Linux)
+            if systemctl --user is-active --quiet "$service"; then
+                # Codex handles SIGHUP by draining every running assistant turn before
+                # exiting. Restart=always then launches the installed binary.
+                systemctl --user kill --kill-who=main --signal=SIGHUP "$service"
+                echo "codex: graceful restart requested; active turns will finish first"
+            else
+                systemctl --user start "$service"
+                wait_for_service_linux
+            fi
+            ;;
+        Darwin)
+            if launchd_is_running; then
+                # KeepAlive relaunches after Codex drains on SIGHUP. Never kickstart -k.
+                launchctl kill SIGHUP "$(launchd_target)"
+                echo "codex: graceful restart requested; active turns will finish first"
+            else
+                bootout_launchd
+                bootstrap_launchd
+                wait_for_service_darwin
+            fi
+            ;;
+        *)
+            echo "codex: unsupported service manager on $os" >&2
+            exit 69
+            ;;
+    esac
 }
 
 restart_if_version_changed() {
-    if ! systemctl --user is-active --quiet "$service"; then
+    if ! service_is_running; then
         return
     fi
 
@@ -160,53 +285,137 @@ report_linger() {
     fi
 }
 
+enable_linux() {
+    require_systemd
+    ensure_codex
+    require_login
+    install_unit
+    remove_legacy_watcher
+    systemctl --user daemon-reload
+    systemctl --user enable "$service"
+    request_graceful_restart
+    report_linger
+}
+
+disable_linux() {
+    require_systemd
+    systemctl --user disable --now "$service" >/dev/null 2>&1 || true
+    remove_legacy_watcher
+    remove_unit
+    systemctl --user daemon-reload
+}
+
+restart_linux() {
+    require_systemd
+    require_codex
+    require_login
+    install_unit
+    systemctl --user daemon-reload
+    request_graceful_restart
+}
+
+status_linux() {
+    require_systemd
+    require_codex
+    "$codex_bin" --version
+    "$codex_bin" login status || true
+    printf "unit installed:  %s\n" "$([ -L "$unit_link" ] && echo yes || echo no)"
+    printf "service enabled: %s\n" "$(systemctl --user is-enabled "$service" 2>/dev/null || true)"
+    printf "service active:  %s\n" "$(systemctl --user is-active "$service" 2>/dev/null || true)"
+    systemctl --user status "$service" --no-pager || true
+}
+
+enable_darwin() {
+    require_launchd
+    ensure_codex
+    require_login
+    install_plist
+    if launchd_is_running; then
+        launchctl kill SIGHUP "$(launchd_target)"
+        echo "codex: graceful restart requested; active turns will finish first"
+    else
+        bootout_launchd
+        bootstrap_launchd
+        wait_for_service_darwin
+    fi
+}
+
+disable_darwin() {
+    require_launchd
+    bootout_launchd
+    remove_plist
+}
+
+restart_darwin() {
+    require_launchd
+    require_codex
+    require_login
+    install_plist
+    request_graceful_restart
+}
+
+status_darwin() {
+    require_launchd
+    require_codex
+    "$codex_bin" --version
+    "$codex_bin" login status || true
+    printf "plist installed: %s\n" "$([ -f "$plist_installed" ] && echo yes || echo no)"
+    printf "service loaded:  %s\n" "$(launchd_is_loaded && echo yes || echo no)"
+    printf "service running: %s\n" "$(launchd_is_running && echo yes || echo no)"
+    launchctl print "$(launchd_target)" 2>/dev/null || true
+}
+
 case $action in
     --install-only)
         ensure_codex
         "$codex_bin" --version
         ;;
     --update)
-        require_systemd
+        require_service_manager
         install_codex
         restart_if_version_changed
         "$codex_bin" --version
         ;;
     --enable)
-        require_systemd
-        ensure_codex
-        require_login
-        install_unit
-        remove_legacy_watcher
-        systemctl --user daemon-reload
-        systemctl --user enable "$service"
-        request_graceful_restart
-        report_linger
+        case $os in
+            Linux) enable_linux ;;
+            Darwin) enable_darwin ;;
+            *)
+                echo "codex: unsupported service manager on $os" >&2
+                exit 69
+                ;;
+        esac
         echo "codex: remote-control service enabled"
         ;;
     --disable)
-        require_systemd
-        systemctl --user disable --now "$service" >/dev/null 2>&1 || true
-        remove_legacy_watcher
-        remove_unit
-        systemctl --user daemon-reload
+        case $os in
+            Linux) disable_linux ;;
+            Darwin) disable_darwin ;;
+            *)
+                echo "codex: unsupported service manager on $os" >&2
+                exit 69
+                ;;
+        esac
         echo "codex: remote-control service disabled and uninstalled"
         ;;
     --restart)
-        require_systemd
-        require_codex
-        require_login
-        install_unit
-        systemctl --user daemon-reload
-        request_graceful_restart
+        case $os in
+            Linux) restart_linux ;;
+            Darwin) restart_darwin ;;
+            *)
+                echo "codex: unsupported service manager on $os" >&2
+                exit 69
+                ;;
+        esac
         ;;
     --status)
-        require_systemd
-        require_codex
-        "$codex_bin" --version
-        "$codex_bin" login status || true
-        printf "unit installed:  %s\n" "$([ -L "$unit_link" ] && echo yes || echo no)"
-        printf "service enabled: %s\n" "$(systemctl --user is-enabled "$service" 2>/dev/null || true)"
-        printf "service active:  %s\n" "$(systemctl --user is-active "$service" 2>/dev/null || true)"
-        systemctl --user status "$service" --no-pager || true
+        case $os in
+            Linux) status_linux ;;
+            Darwin) status_darwin ;;
+            *)
+                echo "codex: unsupported service manager on $os" >&2
+                exit 69
+                ;;
+        esac
         ;;
 esac

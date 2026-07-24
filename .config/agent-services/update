@@ -4,17 +4,26 @@ set -Eeuo pipefail
 umask 077
 
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
-if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
-    lock_dir=$XDG_RUNTIME_DIR
-else
-    lock_dir=$HOME/.cache
-    mkdir -p "$lock_dir"
-fi
+lock_dir=${XDG_CACHE_HOME:-"$HOME/.cache"}/agent-services
+mkdir -p "$lock_dir"
 
-exec 9>>"$lock_dir/agent-services-update.lock"
-if ! flock -n 9; then
-    echo "agent-services: another update run is active; skipping"
-    exit 0
+# Advisory lock on fd 9. Prefer flock; otherwise lockf -s -t N 9.
+# Closing fd 9 releases either. Missing both is a hard error — never
+# pretend another update is active when the lock tools are absent.
+exec 9>>"$lock_dir/update.lock"
+if command -v flock >/dev/null 2>&1; then
+    if ! flock -n 9; then
+        echo "agent-services: another update run is active; skipping" >&2
+        exit 0
+    fi
+elif command -v lockf >/dev/null 2>&1; then
+    if ! lockf -s -t 0 9; then
+        echo "agent-services: another update run is active; skipping" >&2
+        exit 0
+    fi
+else
+    echo "agent-services: neither flock nor lockf is available; cannot serialize updates" >&2
+    exit 69
 fi
 
 failures=0
@@ -30,6 +39,7 @@ run_update() {
     fi
 }
 
+# Ordering is load-bearing: AgentsView, then Grok, then Codex.
 run_update AgentsView "$config_home/agentsview/setup"
 run_update Grok "$config_home/grok/setup"
 run_update Codex "$config_home/codex/setup"

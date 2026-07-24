@@ -26,8 +26,13 @@ unit_dir=$config_home/systemd/user
 service=agentsview.service
 unit_template=$config_dir/systemd/$service
 unit_link=$unit_dir/$service
+plist_label=io.agentsview.service
+plist_template=$config_dir/launchd/$plist_label.plist
+plist_installed=${HOME}/Library/LaunchAgents/$plist_label.plist
 agentsview_bin=
 service_should_run=0
+launch_domain=
+launch_label=
 
 init_config() {
     if [ ! -r "$template" ]; then
@@ -68,6 +73,15 @@ require_systemd() {
     fi
 }
 
+require_launchd() {
+    if ! command -v launchctl >/dev/null 2>&1; then
+        echo "agentsview: launchctl is required for macOS service actions" >&2
+        exit 69
+    fi
+    launch_domain=gui/$(id -u)
+    launch_label=$launch_domain/$plist_label
+}
+
 install_unit() {
     if [ ! -r "$unit_template" ]; then
         echo "agentsview: missing tracked unit template: $unit_template" >&2
@@ -89,6 +103,93 @@ remove_legacy_watcher() {
     rm -f "$unit_dir/agentsview-binary-restart.service"
 }
 
+install_plist() {
+    if [ ! -r "$plist_template" ]; then
+        echo "agentsview: missing tracked launchd template: $plist_template" >&2
+        exit 66
+    fi
+    mkdir -p "$HOME/Library/LaunchAgents"
+    install -m 600 "$plist_template" "$plist_installed"
+}
+
+remove_plist() {
+    rm -f "$plist_installed"
+}
+
+launchd_is_loaded() {
+    launchctl print "$launch_label" >/dev/null 2>&1
+}
+
+launchd_print() {
+    launchctl print "$launch_label" 2>/dev/null
+}
+
+launchd_pid() {
+    launchd_print | awk '/^[[:space:]]*pid = / { print $3; exit }'
+}
+
+launchd_is_running() {
+    out=$(launchd_print) || return 1
+    printf '%s\n' "$out" | grep -q 'state = running' || return 1
+    pid=$(printf '%s\n' "$out" | awk '/^[[:space:]]*pid = / { print $3; exit }')
+    case $pid in
+        ''|0|*[!0-9]*) return 1 ;;
+    esac
+    kill -0 "$pid" 2>/dev/null
+}
+
+wait_for_unload() {
+    attempts=0
+    while launchd_is_loaded; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 300 ]; then
+            echo "agentsview: timed out waiting for launchd to unload $launch_label" >&2
+            exit 75
+        fi
+        sleep 0.1
+    done
+}
+
+bootout_launchd() {
+    if launchd_is_loaded; then
+        launchctl bootout "$launch_label" >/dev/null 2>&1 || true
+    fi
+    wait_for_unload
+}
+
+bootstrap_launchd() {
+    if [ ! -f "$plist_installed" ]; then
+        echo "agentsview: missing installed LaunchAgent: $plist_installed" >&2
+        exit 66
+    fi
+    # Ensure the gui-domain service is allowed; residual BTM state can otherwise
+    # make a fresh bootstrap return a generic I/O error.
+    launchctl enable "$launch_label" >/dev/null 2>&1 || true
+
+    if launchd_is_loaded; then
+        return 0
+    fi
+
+    attempts=0
+    while :; do
+        if err=$(launchctl bootstrap "$launch_domain" "$plist_installed" 2>&1); then
+            return 0
+        fi
+        case $err in
+            *"already bootstrapped"*|*"service already loaded"*)
+                return 0
+                ;;
+        esac
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 3 ]; then
+            printf '%s\n' "$err" >&2
+            return 1
+        fi
+        bootout_launchd
+        sleep 0.2
+    done
+}
+
 wait_for_service() {
     attempts=0
     while ! systemctl --user is-active --quiet "$service"; do
@@ -108,6 +209,25 @@ wait_for_service() {
     fi
 }
 
+wait_for_service_macos() {
+    attempts=0
+    while ! launchd_is_running; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 40 ]; then
+            echo "agentsview: service did not become running" >&2
+            launchctl print "$launch_label" >&2 || true
+            exit 75
+        fi
+        sleep 0.25
+    done
+    sleep 0.5
+    if ! launchd_is_running; then
+        echo "agentsview: service exited during startup" >&2
+        launchctl print "$launch_label" >&2 || true
+        exit 75
+    fi
+}
+
 binary_is_stale() {
     if ! systemctl --user is-active --quiet "$service"; then
         return 1
@@ -121,9 +241,74 @@ binary_is_stale() {
     [ -n "$running_id" ] && [ -n "$installed_id" ] && [ "$running_id" != "$installed_id" ]
 }
 
+resolve_package_binary_macos() {
+    bin=$agentsview_bin
+    while [ -L "$bin" ]; do
+        target=$(readlink "$bin" 2>/dev/null || true)
+        if [ -z "$target" ]; then
+            break
+        fi
+        case $target in
+            /*) bin=$target ;;
+            *) bin=$(dirname "$bin")/$target ;;
+        esac
+    done
+
+    # uv tool installs a Python entrypoint under bin/ while the running process
+    # execs the native package binary under lib/python*/site-packages/.../bin/.
+    case $bin in
+        */uv/tools/agentsview/bin/agentsview|*/.local/share/uv/tools/agentsview/bin/agentsview)
+            root=${bin%/bin/agentsview}
+            for candidate in "$root"/lib/python*/site-packages/agentsview/bin/agentsview; do
+                if [ -x "$candidate" ]; then
+                    printf '%s\n' "$candidate"
+                    return 0
+                fi
+            done
+            ;;
+    esac
+    printf '%s\n' "$bin"
+}
+
+binary_is_stale_macos() {
+    if ! launchd_is_running; then
+        return 1
+    fi
+    main_pid=$(launchd_pid)
+    case $main_pid in
+        ''|0|*[!0-9]*) return 1 ;;
+    esac
+    # Prefer the first real executable path from the process argv / txt map,
+    # skipping SQLite shm mappings that lsof can also report as txt.
+    running_path=$(ps -p "$main_pid" -o args= 2>/dev/null | awk '{ print $1; exit }')
+    case $running_path in
+        ''|/*) ;;
+        *) running_path= ;;
+    esac
+    if [ -z "$running_path" ] || [ ! -e "$running_path" ]; then
+        running_path=$(lsof -a -p "$main_pid" -d txt -Fn 2>/dev/null |
+            awk '/^n\// && $0 !~ /\.db/ { print substr($0, 2); exit }')
+    fi
+    if [ -z "$running_path" ]; then
+        return 1
+    fi
+    installed_path=$(resolve_package_binary_macos)
+    running_id=$(stat -f '%d:%i' "$running_path" 2>/dev/null || true)
+    installed_id=$(stat -f '%d:%i' "$installed_path" 2>/dev/null || true)
+    [ -n "$running_id" ] && [ -n "$installed_id" ] && [ "$running_id" != "$installed_id" ]
+}
+
 restore_service() {
     if [ "$service_should_run" -eq 1 ]; then
         systemctl --user start "$service" || true
+    fi
+}
+
+restore_service_macos() {
+    if [ "$service_should_run" -eq 1 ]; then
+        if [ -f "$plist_installed" ]; then
+            bootstrap_launchd || true
+        fi
     fi
 }
 
@@ -173,6 +358,51 @@ update_linux() {
     trap - 0 1 2 15
 }
 
+update_macos() {
+    require_launchd
+    resolve_binary
+
+    if ! check_output=$("$agentsview_bin" update --check --force 2>&1); then
+        printf '%s\n' "$check_output" >&2
+        return 1
+    fi
+    printf '%s\n' "$check_output"
+
+    update_available=0
+    case $check_output in
+        *"Update available:"*) update_available=1 ;;
+    esac
+    stale=0
+    if binary_is_stale_macos; then
+        stale=1
+    fi
+    if [ "$update_available" -eq 0 ] && [ "$stale" -eq 0 ]; then
+        return 0
+    fi
+
+    service_should_run=0
+    if launchd_is_loaded || [ -f "$plist_installed" ]; then
+        service_should_run=1
+    fi
+    trap 'restore_service_macos' 0 1 2 15
+
+    bootout_launchd
+    # Drop any unmanaged background server so launchd remains the sole owner.
+    "$agentsview_bin" serve stop >/dev/null 2>&1 || true
+    "$agentsview_bin" daemon stop >/dev/null 2>&1 || true
+
+    if [ "$update_available" -eq 1 ]; then
+        "$agentsview_bin" update --yes --force
+    fi
+    if [ "$service_should_run" -eq 1 ]; then
+        install_plist
+        bootstrap_launchd
+        wait_for_service_macos
+    fi
+    service_should_run=0
+    trap - 0 1 2 15
+}
+
 enable_linux() {
     require_systemd
     init_config
@@ -194,25 +424,47 @@ disable_linux() {
 }
 
 enable_macos() {
+    require_launchd
     init_config
     resolve_binary
-    domain=gui/$(id -u)
-    label=$domain/io.agentsview.service
-    plist=$HOME/Library/LaunchAgents/io.agentsview.service.plist
+    install_plist
+    bootout_launchd
+    bootstrap_launchd
+    wait_for_service_macos
+}
 
-    if launchctl print "$label" >/dev/null 2>&1; then
-        launchctl bootout "$label"
+disable_macos() {
+    require_launchd
+    bootout_launchd
+    remove_plist
+}
+
+restart_macos() {
+    require_launchd
+    init_config
+    resolve_binary
+    install_plist
+    bootout_launchd
+    bootstrap_launchd
+    wait_for_service_macos
+}
+
+status_macos() {
+    require_launchd
+    printf "plist installed: %s\n" "$([ -f "$plist_installed" ] && echo yes || echo no)"
+    if launchd_is_loaded; then
+        printf "service loaded:  yes\n"
+    else
+        printf "service loaded:  no\n"
     fi
-    attempts=0
-    while launchctl print "$label" >/dev/null 2>&1; do
-        attempts=$((attempts + 1))
-        if [ "$attempts" -ge 50 ]; then
-            echo "agentsview: timed out waiting for launchd to unload $label" >&2
-            exit 75
-        fi
-        sleep 0.1
-    done
-    launchctl bootstrap "$domain" "$plist"
+    if launchd_is_running; then
+        printf "service running: yes (pid %s)\n" "$(launchd_pid)"
+    else
+        printf "service running: no\n"
+    fi
+    if launchd_is_loaded; then
+        launchctl print "$launch_label" || true
+    fi
 }
 
 case $action in
@@ -230,10 +482,7 @@ case $action in
     --disable)
         case $(uname -s) in
             Linux) disable_linux ;;
-            Darwin)
-                domain=gui/$(id -u)
-                launchctl bootout "$domain/io.agentsview.service" >/dev/null 2>&1 || true
-                ;;
+            Darwin) disable_macos ;;
             *) echo "agentsview: unsupported service manager on $(uname -s)" >&2; exit 69 ;;
         esac
         echo "agentsview: service disabled and uninstalled"
@@ -249,7 +498,7 @@ case $action in
                 systemctl --user restart "$service"
                 wait_for_service
                 ;;
-            Darwin) enable_macos ;;
+            Darwin) restart_macos ;;
             *) echo "agentsview: unsupported service manager on $(uname -s)" >&2; exit 69 ;;
         esac
         echo "agentsview: service restarted"
@@ -266,17 +515,18 @@ case $action in
                 systemctl --user status "$service" --no-pager || true
                 ;;
             Darwin)
-                launchctl print "gui/$(id -u)/io.agentsview.service" || true
+                status_macos
+                ;;
+            *)
+                echo "agentsview: unsupported service manager on $(uname -s)" >&2
+                exit 69
                 ;;
         esac
         ;;
     --update)
         case $(uname -s) in
             Linux) update_linux ;;
-            Darwin)
-                resolve_binary
-                "$agentsview_bin" update --yes --force
-                ;;
+            Darwin) update_macos ;;
             *) echo "agentsview: unsupported service manager on $(uname -s)" >&2; exit 69 ;;
         esac
         ;;

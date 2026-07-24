@@ -18,18 +18,33 @@ case $action in
     *) usage ;;
 esac
 
-if [ "$(uname -s)" != Linux ] || ! command -v systemctl >/dev/null 2>&1; then
-    echo "agent-services: systemd-based Linux is required" >&2
-    exit 69
-fi
-
+os=$(uname -s)
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 config_dir=$config_home/agent-services
-unit_dir=$config_home/systemd/user
-update_service=agent-services-update.service
-update_timer=agent-services-update.timer
 
-install_unit() {
+# Codex goes last because an already-running app-server may schedule a
+# graceful restart after the current assistant turn drains.
+enable_components() {
+    "$config_home/agentsview/setup" --enable
+    "$config_home/grok/setup" --enable
+    "$config_home/codex/setup" --enable
+}
+
+disable_components() {
+    "$config_home/agentsview/setup" --disable
+    "$config_home/grok/setup" --disable
+    "$config_home/codex/setup" --disable
+}
+
+status_components() {
+    "$config_home/agentsview/setup" --status
+    "$config_home/grok/setup" --status
+    "$config_home/codex/setup" --status
+}
+
+# --- Linux (systemd) helpers ---
+
+linux_install_unit() {
     unit=$1
     template=$config_dir/systemd/$unit
     link=$unit_dir/$unit
@@ -42,11 +57,11 @@ install_unit() {
     ln -s "$template" "$link"
 }
 
-remove_unit() {
+linux_remove_unit() {
     rm -f "$unit_dir/$1"
 }
 
-report_linger() {
+linux_report_linger() {
     if command -v loginctl >/dev/null 2>&1; then
         current_user=$(id -un)
         linger=$(loginctl show-user "$current_user" -p Linger --value 2>/dev/null || true)
@@ -57,39 +72,156 @@ report_linger() {
     fi
 }
 
-case $action in
-    --enable)
-        # Codex goes last because an already-running app-server may schedule a
-        # graceful restart after the current assistant turn drains.
-        "$config_home/agentsview/setup" --enable
-        "$config_home/grok/setup" --enable
-        "$config_home/codex/setup" --enable
-        install_unit "$update_service"
-        install_unit "$update_timer"
-        systemctl --user daemon-reload
-        systemctl --user enable --now "$update_timer"
-        report_linger
-        echo "agent-services: services and hourly updater enabled"
+linux_setup() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        echo "agent-services: systemd-based Linux is required" >&2
+        exit 69
+    fi
+
+    unit_dir=$config_home/systemd/user
+    update_service=agent-services-update.service
+    update_timer=agent-services-update.timer
+
+    case $action in
+        --enable)
+            enable_components
+            linux_install_unit "$update_service"
+            linux_install_unit "$update_timer"
+            systemctl --user daemon-reload
+            systemctl --user enable --now "$update_timer"
+            linux_report_linger
+            echo "agent-services: services and hourly updater enabled"
+            ;;
+        --disable)
+            systemctl --user disable --now "$update_timer" "$update_service" >/dev/null 2>&1 || true
+            linux_remove_unit "$update_timer"
+            linux_remove_unit "$update_service"
+            disable_components
+            systemctl --user daemon-reload
+            echo "agent-services: services and hourly updater disabled"
+            ;;
+        --status)
+            printf "updater installed: %s\n" "$([ -L "$unit_dir/$update_timer" ] && echo yes || echo no)"
+            printf "timer enabled:    %s\n" "$(systemctl --user is-enabled "$update_timer" 2>/dev/null || true)"
+            printf "timer active:     %s\n" "$(systemctl --user is-active "$update_timer" 2>/dev/null || true)"
+            status_components
+            ;;
+        --update)
+            exec "$config_dir/update"
+            ;;
+    esac
+}
+
+# --- Darwin (launchd) helpers ---
+
+darwin_require_template() {
+    if [ ! -r "$template" ]; then
+        echo "agent-services: missing tracked LaunchAgent template: $template" >&2
+        exit 66
+    fi
+}
+
+darwin_wait_unloaded() {
+    # Wait until launchctl no longer lists the target before re-bootstrap.
+    i=0
+    while [ "$i" -lt 300 ]; do
+        if ! launchctl print "$gui_domain/$label" >/dev/null 2>&1; then
+            return 0
+        fi
+        i=$((i + 1))
+        sleep 0.1
+    done
+    echo "agent-services: timed out waiting for $label to unload" >&2
+    return 1
+}
+
+darwin_bootout_updater() {
+    if launchctl print "$gui_domain/$label" >/dev/null 2>&1; then
+        launchctl bootout "$gui_domain/$label" >/dev/null 2>&1 || true
+        darwin_wait_unloaded
+    fi
+}
+
+darwin_install_plist() {
+    darwin_require_template
+    mkdir -p "$agents_dir"
+    # Copy inert tracked template into LaunchAgents (mode 600).
+    tmp=$installed_plist.tmp.$$
+    cp "$template" "$tmp"
+    chmod 600 "$tmp"
+    mv -f "$tmp" "$installed_plist"
+}
+
+darwin_remove_plist() {
+    rm -f "$installed_plist"
+}
+
+darwin_bootstrap_updater() {
+    darwin_install_plist
+    darwin_bootout_updater
+    launchctl enable "$gui_domain/$label" >/dev/null 2>&1 || true
+    launchctl bootstrap "$gui_domain" "$installed_plist"
+}
+
+darwin_setup() {
+    uid=$(id -u)
+    gui_domain="gui/$uid"
+    label=io.agent-services.update
+    template=$config_dir/launchd/$label.plist
+    agents_dir=$HOME/Library/LaunchAgents
+    installed_plist=$agents_dir/$label.plist
+
+    case $action in
+        --enable)
+            enable_components
+            darwin_bootstrap_updater
+            echo "agent-services: services and hourly updater enabled"
+            ;;
+        --disable)
+            darwin_bootout_updater
+            darwin_remove_plist
+            disable_components
+            echo "agent-services: services and hourly updater disabled"
+            ;;
+        --status)
+            if [ -f "$installed_plist" ]; then
+                installed=yes
+            else
+                installed=no
+            fi
+            printf "updater installed: %s\n" "$installed"
+
+            if launchctl print "$gui_domain/$label" >/dev/null 2>&1; then
+                loaded=yes
+                # Best-effort state from launchctl print (loaded/running).
+                print_out=$(launchctl print "$gui_domain/$label" 2>/dev/null || true)
+                state=$(printf '%s\n' "$print_out" | awk -F'= ' '/state = / { print $2; exit }')
+                if [ -z "${state:-}" ]; then
+                    state=unknown
+                fi
+            else
+                loaded=no
+                state=not-loaded
+            fi
+            printf "updater loaded:    %s\n" "$loaded"
+            printf "updater state:     %s\n" "$state"
+            status_components
+            ;;
+        --update)
+            exec "$config_dir/update"
+            ;;
+    esac
+}
+
+case $os in
+    Linux)
+        linux_setup
         ;;
-    --disable)
-        systemctl --user disable --now "$update_timer" "$update_service" >/dev/null 2>&1 || true
-        remove_unit "$update_timer"
-        remove_unit "$update_service"
-        "$config_home/agentsview/setup" --disable
-        "$config_home/grok/setup" --disable
-        "$config_home/codex/setup" --disable
-        systemctl --user daemon-reload
-        echo "agent-services: services and hourly updater disabled"
+    Darwin)
+        darwin_setup
         ;;
-    --status)
-        printf "updater installed: %s\n" "$([ -L "$unit_dir/$update_timer" ] && echo yes || echo no)"
-        printf "timer enabled:    %s\n" "$(systemctl --user is-enabled "$update_timer" 2>/dev/null || true)"
-        printf "timer active:     %s\n" "$(systemctl --user is-active "$update_timer" 2>/dev/null || true)"
-        "$config_home/agentsview/setup" --status
-        "$config_home/grok/setup" --status
-        "$config_home/codex/setup" --status
-        ;;
-    --update)
-        exec "$config_dir/update"
+    *)
+        echo "agent-services: unsupported kernel: $os (Linux or Darwin required)" >&2
+        exit 69
         ;;
 esac

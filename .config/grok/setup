@@ -18,10 +18,15 @@ case $action in
     *) usage ;;
 esac
 
-if [ "$(uname -s)" != Linux ]; then
-    echo "grok: this setup currently supports Linux hosts only" >&2
-    exit 69
-fi
+os=$(uname -s)
+case $os in
+    Linux) service_manager=systemd ;;
+    Darwin) service_manager=launchd ;;
+    *)
+        echo "grok: unsupported service manager on $os" >&2
+        exit 69
+        ;;
+esac
 
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 config_dir=$config_home/grok
@@ -29,6 +34,11 @@ unit_dir=$config_home/systemd/user
 service=grok-agent.service
 unit_template=$config_dir/systemd/$service
 unit_link=$unit_dir/$service
+label=io.grok.agent
+launch_domain=gui/$(id -u)
+launch_target=$launch_domain/$label
+plist_template=$config_dir/launchd/$label.plist
+plist_install=$HOME/Library/LaunchAgents/$label.plist
 local_template=$config_dir/service.local.example
 local_config=$config_dir/service.local
 grok_home=${GROK_HOME:-"$HOME/.grok"}
@@ -40,9 +50,23 @@ service_was_active=0
 
 require_systemd() {
     if ! command -v systemctl >/dev/null 2>&1; then
-        echo "grok: systemctl is required for service actions" >&2
+        echo "grok: systemctl is required for Linux service actions" >&2
         exit 69
     fi
+}
+
+require_launchd() {
+    if ! command -v launchctl >/dev/null 2>&1; then
+        echo "grok: launchctl is required for macOS service actions" >&2
+        exit 69
+    fi
+}
+
+require_service_manager() {
+    case $service_manager in
+        systemd) require_systemd ;;
+        launchd) require_launchd ;;
+    esac
 }
 
 require_jq() {
@@ -77,6 +101,14 @@ install_grok() {
     if [ ! -x "$grok_bin" ]; then
         echo "grok: installer did not create $grok_bin" >&2
         exit 70
+    fi
+
+    # Replacing the on-disk binary while a managed service still runs the old
+    # image requires a later idle restart. Preserve a marker when we cannot
+    # prove process/binary identity (especially on Darwin without /proc).
+    if service_is_active; then
+        mkdir -p "$grok_home"
+        touch "$restart_marker"
     fi
 }
 
@@ -141,6 +173,19 @@ remove_unit() {
     rm -f "$unit_link"
 }
 
+install_plist() {
+    if [ ! -r "$plist_template" ]; then
+        echo "grok: missing tracked LaunchAgent template: $plist_template" >&2
+        exit 66
+    fi
+    mkdir -p "$HOME/Library/LaunchAgents"
+    install -m 600 "$plist_template" "$plist_install"
+}
+
+remove_plist() {
+    rm -f "$plist_install"
+}
+
 remove_legacy_watcher() {
     systemctl --user disable --now grok-binary.path \
         grok-binary-restart.service >/dev/null 2>&1 || true
@@ -148,21 +193,149 @@ remove_legacy_watcher() {
     rm -f "$unit_dir/grok-binary-restart.service"
 }
 
+service_is_active() {
+    case $service_manager in
+        systemd)
+            command -v systemctl >/dev/null 2>&1 || return 1
+            systemctl --user is-active --quiet "$service"
+            ;;
+        launchd)
+            command -v launchctl >/dev/null 2>&1 || return 1
+            out=$(launchctl print "$launch_target" 2>/dev/null) || return 1
+            printf '%s\n' "$out" | grep -q 'state = running' || return 1
+            pid=$(printf '%s\n' "$out" | awk '/^[[:space:]]*pid = / { print $3; exit }')
+            case $pid in
+                ''|0|*[!0-9]*) return 1 ;;
+            esac
+            kill -0 "$pid" 2>/dev/null
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+service_is_loaded() {
+    case $service_manager in
+        systemd)
+            command -v systemctl >/dev/null 2>&1 || return 1
+            systemctl --user is-enabled --quiet "$service" 2>/dev/null
+            ;;
+        launchd)
+            command -v launchctl >/dev/null 2>&1 || return 1
+            launchctl print "$launch_target" >/dev/null 2>&1
+            ;;
+        *) return 1 ;;
+    esac
+}
+
+service_main_pid() {
+    case $service_manager in
+        systemd)
+            systemctl --user show "$service" -p MainPID --value 2>/dev/null || true
+            ;;
+        launchd)
+            out=$(launchctl print "$launch_target" 2>/dev/null) || {
+                echo 0
+                return 0
+            }
+            printf '%s\n' "$out" | awk '/^[[:space:]]*pid = / { print $3; exit }'
+            ;;
+        *)
+            echo 0
+            ;;
+    esac
+}
+
+wait_for_launchd_unload() {
+    attempts=0
+    while launchctl print "$launch_target" >/dev/null 2>&1; do
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 300 ]; then
+            echo "grok: timed out waiting for launchd to unload $launch_target" >&2
+            exit 75
+        fi
+        sleep 0.1
+    done
+}
+
+bootout_launchd() {
+    if launchctl print "$launch_target" >/dev/null 2>&1; then
+        launchctl bootout "$launch_target" >/dev/null 2>&1 || true
+    fi
+    wait_for_launchd_unload
+}
+
+bootstrap_launchd() {
+    if [ ! -r "$plist_install" ]; then
+        echo "grok: missing installed LaunchAgent: $plist_install" >&2
+        exit 66
+    fi
+    # Residual Background Task Management state can otherwise make a fresh
+    # bootstrap return a generic I/O error.
+    launchctl enable "$launch_target" >/dev/null 2>&1 || true
+    bootout_launchd
+    attempts=0
+    while :; do
+        if err=$(launchctl bootstrap "$launch_domain" "$plist_install" 2>&1); then
+            return 0
+        fi
+        case $err in
+            *"already bootstrapped"*|*"service already loaded"*)
+                return 0
+                ;;
+        esac
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 3 ]; then
+            printf '%s\n' "$err" >&2
+            return 1
+        fi
+        bootout_launchd
+        sleep 0.2
+    done
+}
+
+start_service() {
+    case $service_manager in
+        systemd)
+            systemctl --user start "$service"
+            ;;
+        launchd)
+            bootstrap_launchd
+            ;;
+    esac
+}
+
+stop_service() {
+    case $service_manager in
+        systemd)
+            systemctl --user stop "$service"
+            ;;
+        launchd)
+            bootout_launchd
+            ;;
+    esac
+}
+
 wait_for_service() {
     attempts=0
-    while ! systemctl --user is-active --quiet "$service"; do
+    while ! service_is_active; do
         attempts=$((attempts + 1))
         if [ "$attempts" -ge 40 ]; then
             echo "grok: service did not become active" >&2
-            systemctl --user status "$service" --no-pager >&2 || true
+            case $service_manager in
+                systemd) systemctl --user status "$service" --no-pager >&2 || true ;;
+                launchd) launchctl print "$launch_target" >&2 || true ;;
+            esac
             exit 75
         fi
         sleep 0.25
     done
     sleep 0.5
-    if ! systemctl --user is-active --quiet "$service"; then
+    if ! service_is_active; then
         echo "grok: service exited during startup" >&2
-        systemctl --user status "$service" --no-pager >&2 || true
+        case $service_manager in
+            systemd) systemctl --user status "$service" --no-pager >&2 || true ;;
+            launchd) launchctl print "$launch_target" >&2 || true ;;
+        esac
         exit 75
     fi
 }
@@ -170,15 +343,29 @@ wait_for_service() {
 acquire_session_lock() {
     mkdir -p "$grok_home"
     exec 9>>"$session_lock"
-    if ! flock -w 5 9; then
+    if command -v flock >/dev/null 2>&1; then
+        if ! flock -w 5 9; then
+            exec 9>&-
+            echo "grok: session registry is busy; deferring service change"
+            return 1
+        fi
+    elif command -v lockf >/dev/null 2>&1; then
+        if ! lockf -s -t 5 9; then
+            exec 9>&-
+            echo "grok: session registry is busy; deferring service change"
+            return 1
+        fi
+    else
         exec 9>&-
-        echo "grok: session registry is busy; deferring service change"
-        return 1
+        echo "grok: flock or lockf is required for session registry locking" >&2
+        exit 69
     fi
 }
 
 release_session_lock() {
-    flock -u 9
+    if command -v flock >/dev/null 2>&1; then
+        flock -u 9 2>/dev/null || true
+    fi
     exec 9>&-
 }
 
@@ -202,7 +389,7 @@ has_live_sessions() {
                 return 0
                 ;;
         esac
-        if [ -d "/proc/$pid" ]; then
+        if kill -0 "$pid" 2>/dev/null; then
             echo "grok: active task registered by PID $pid; update deferred"
             return 0
         fi
@@ -211,16 +398,44 @@ has_live_sessions() {
 }
 
 binary_is_stale() {
-    if ! systemctl --user is-active --quiet "$service"; then
+    if ! service_is_active; then
         return 1
     fi
-    main_pid=$(systemctl --user show "$service" -p MainPID --value)
+    main_pid=$(service_main_pid)
     case $main_pid in
         ''|0|*[!0-9]*) return 1 ;;
     esac
-    running_id=$(stat -Lc '%d:%i' "/proc/$main_pid/exe" 2>/dev/null || true)
-    installed_id=$(stat -Lc '%d:%i' "$grok_bin" 2>/dev/null || true)
-    [ -n "$running_id" ] && [ -n "$installed_id" ] && [ "$running_id" != "$installed_id" ]
+
+    case $service_manager in
+        systemd)
+            # Compare the running image inode to the installed binary.
+            running_id=$(stat -Lc '%d:%i' "/proc/$main_pid/exe" 2>/dev/null || true)
+            installed_id=$(stat -Lc '%d:%i' "$grok_bin" 2>/dev/null || true)
+            [ -n "$running_id" ] && [ -n "$installed_id" ] && [ "$running_id" != "$installed_id" ]
+            ;;
+        launchd)
+            # Darwin has no /proc/<pid>/exe. Prefer txt-path inode compare when
+            # lsof is available; otherwise preserve the restart marker path and
+            # never invent a false-negative that skips a needed restart.
+            if ! command -v lsof >/dev/null 2>&1; then
+                return 1
+            fi
+            running_path=$(lsof -a -p "$main_pid" -d txt -Fn 2>/dev/null |
+                awk '/^n\// { print substr($0, 2); exit }')
+            if [ -z "$running_path" ]; then
+                return 1
+            fi
+            running_id=$(stat -f '%d:%i' "$running_path" 2>/dev/null || true)
+            installed_id=$(stat -f '%d:%i' "$grok_bin" 2>/dev/null || true)
+            if [ -z "$installed_id" ] && [ -L "$grok_bin" ]; then
+                installed_id=$(stat -f '%d:%i' "$(readlink "$grok_bin")" 2>/dev/null || true)
+            fi
+            [ -n "$running_id" ] && [ -n "$installed_id" ] && [ "$running_id" != "$installed_id" ]
+            ;;
+        *)
+            return 1
+            ;;
+    esac
 }
 
 stop_when_idle() {
@@ -234,13 +449,13 @@ stop_when_idle() {
     fi
 
     service_was_active=0
-    if systemctl --user is-active --quiet "$service"; then
+    if service_is_active; then
         service_was_active=1
         # Hold Grok's own registry lock through stop so a new task cannot race
         # the idle check and receive a termination signal.
-        if ! systemctl --user stop "$service"; then
+        if ! stop_service; then
             release_session_lock
-            systemctl --user start "$service" >/dev/null 2>&1 || true
+            start_service >/dev/null 2>&1 || true
             return 1
         fi
     fi
@@ -249,7 +464,7 @@ stop_when_idle() {
 
 restore_service() {
     if [ "$service_was_active" -eq 1 ]; then
-        systemctl --user start "$service" || true
+        start_service || true
     fi
 }
 
@@ -260,7 +475,7 @@ restart_when_idle() {
         return 0
     fi
     trap 'restore_service' 0 1 2 15
-    systemctl --user start "$service"
+    start_service
     wait_for_service
     service_was_active=0
     rm -f "$restart_marker"
@@ -269,7 +484,7 @@ restart_when_idle() {
 
 update_grok() {
     require_grok
-    require_systemd
+    require_service_manager
     require_jq
 
     if ! check_json=$("$grok_bin" update --check --json); then
@@ -297,6 +512,12 @@ update_grok() {
         return 0
     fi
 
+    if [ "$update_available" = true ]; then
+        # Remember that an update/restart is owed if a live session blocks us.
+        mkdir -p "$grok_home"
+        touch "$restart_marker"
+    fi
+
     if ! stop_when_idle; then
         echo "grok: update/restart deferred until no task is active"
         return 0
@@ -307,7 +528,7 @@ update_grok() {
         install_grok
     fi
     if [ "$service_was_active" -eq 1 ]; then
-        systemctl --user start "$service"
+        start_service
         wait_for_service
     fi
     service_was_active=0
@@ -317,6 +538,9 @@ update_grok() {
 }
 
 report_linger() {
+    if [ "$service_manager" != systemd ]; then
+        return 0
+    fi
     if command -v loginctl >/dev/null 2>&1; then
         current_user=$(id -un)
         linger=$(loginctl show-user "$current_user" -p Linger --value 2>/dev/null || true)
@@ -325,6 +549,93 @@ report_linger() {
             echo "  loginctl enable-linger \"$current_user\""
         fi
     fi
+}
+
+enable_linux() {
+    require_systemd
+    ensure_grok
+    require_login
+    ensure_local_config
+    install_unit
+    remove_legacy_watcher
+    systemctl --user daemon-reload
+    systemctl --user enable "$service"
+    if service_is_active; then
+        restart_when_idle
+    else
+        start_service
+        wait_for_service
+    fi
+    report_linger
+}
+
+disable_linux() {
+    require_systemd
+    systemctl --user disable --now "$service" >/dev/null 2>&1 || true
+    remove_legacy_watcher
+    remove_unit
+    rm -f "$restart_marker"
+    systemctl --user daemon-reload
+}
+
+restart_linux() {
+    require_systemd
+    require_grok
+    ensure_local_config
+    install_unit
+    systemctl --user daemon-reload
+    restart_when_idle
+}
+
+status_linux() {
+    require_systemd
+    require_grok
+    "$grok_bin" --version
+    printf "unit installed:  %s\n" "$([ -L "$unit_link" ] && echo yes || echo no)"
+    printf "service enabled: %s\n" "$(systemctl --user is-enabled "$service" 2>/dev/null || true)"
+    printf "service active:  %s\n" "$(systemctl --user is-active "$service" 2>/dev/null || true)"
+    printf "restart pending: %s\n" "$([ -e "$restart_marker" ] && echo yes || echo no)"
+    systemctl --user status "$service" --no-pager || true
+}
+
+enable_macos() {
+    require_launchd
+    ensure_grok
+    require_login
+    ensure_local_config
+    install_plist
+    if service_is_active; then
+        restart_when_idle
+    else
+        start_service
+        wait_for_service
+    fi
+}
+
+disable_macos() {
+    require_launchd
+    bootout_launchd
+    remove_plist
+    rm -f "$restart_marker"
+}
+
+restart_macos() {
+    require_launchd
+    require_grok
+    ensure_local_config
+    install_plist
+    restart_when_idle
+}
+
+status_macos() {
+    require_launchd
+    require_grok
+    "$grok_bin" --version
+    printf "plist installed: %s\n" "$([ -f "$plist_install" ] && echo yes || echo no)"
+    printf "service loaded:  %s\n" "$(service_is_loaded && echo yes || echo no)"
+    printf "service active:  %s\n" "$(service_is_active && echo yes || echo no)"
+    printf "restart pending: %s\n" "$([ -e "$restart_marker" ] && echo yes || echo no)"
+    launchctl print "$launch_target" 2>/dev/null || true
 }
 
 case $action in
@@ -336,48 +647,29 @@ case $action in
         update_grok
         ;;
     --enable)
-        require_systemd
-        ensure_grok
-        require_login
-        ensure_local_config
-        install_unit
-        remove_legacy_watcher
-        systemctl --user daemon-reload
-        systemctl --user enable "$service"
-        if systemctl --user is-active --quiet "$service"; then
-            restart_when_idle
-        else
-            systemctl --user start "$service"
-            wait_for_service
-        fi
-        report_linger
+        case $service_manager in
+            systemd) enable_linux ;;
+            launchd) enable_macos ;;
+        esac
         echo "grok: agent service enabled"
         ;;
     --disable)
-        require_systemd
-        systemctl --user disable --now "$service" >/dev/null 2>&1 || true
-        remove_legacy_watcher
-        remove_unit
-        rm -f "$restart_marker"
-        systemctl --user daemon-reload
+        case $service_manager in
+            systemd) disable_linux ;;
+            launchd) disable_macos ;;
+        esac
         echo "grok: agent service disabled and uninstalled"
         ;;
     --restart)
-        require_systemd
-        require_grok
-        ensure_local_config
-        install_unit
-        systemctl --user daemon-reload
-        restart_when_idle
+        case $service_manager in
+            systemd) restart_linux ;;
+            launchd) restart_macos ;;
+        esac
         ;;
     --status)
-        require_systemd
-        require_grok
-        "$grok_bin" --version
-        printf "unit installed:  %s\n" "$([ -L "$unit_link" ] && echo yes || echo no)"
-        printf "service enabled: %s\n" "$(systemctl --user is-enabled "$service" 2>/dev/null || true)"
-        printf "service active:  %s\n" "$(systemctl --user is-active "$service" 2>/dev/null || true)"
-        printf "restart pending: %s\n" "$([ -e "$restart_marker" ] && echo yes || echo no)"
-        systemctl --user status "$service" --no-pager || true
+        case $service_manager in
+            systemd) status_linux ;;
+            launchd) status_macos ;;
+        esac
         ;;
 esac
