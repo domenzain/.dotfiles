@@ -39,7 +39,10 @@ run_update() {
     fi
 }
 
-# Ordering is load-bearing: AgentsView, then Grok, then Codex.
+# Codex remains last because an already-running app-server may schedule a
+# graceful restart after the current assistant turn drains.
+run_update Pi "$config_home/pi/setup"
+run_update "Oh My Pi" "$config_home/omp/setup"
 run_update AgentsView "$config_home/agentsview/setup"
 run_update Grok "$config_home/grok/setup"
 run_update Codex "$config_home/codex/setup"

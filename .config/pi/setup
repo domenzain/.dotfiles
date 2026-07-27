@@ -1,0 +1,134 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+usage() {
+    echo "usage: $0 [--install-only|--status|--update]" >&2
+    exit 64
+}
+
+if [ "$#" -gt 1 ]; then
+    usage
+fi
+
+action=${1:---install-only}
+case $action in
+    --install-only|--status|--update) ;;
+    *) usage ;;
+esac
+
+case $(uname -s) in
+    Linux|Darwin) ;;
+    *)
+        echo "pi: unsupported kernel (Linux or Darwin required)" >&2
+        exit 69
+        ;;
+esac
+
+config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
+pi_package=@earendil-works/pi-coding-agent
+pi_bin=
+
+configure_runtime_path() {
+    PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
+    export PATH
+
+    if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
+        return
+    fi
+
+    nvm_dir=${NVM_DIR:-"$config_home/nvm"}
+    if [ -s "$nvm_dir/nvm.sh" ]; then
+        NVM_DIR=$nvm_dir
+        export NVM_DIR
+        # nvm is not safe under nounset while it initializes.
+        set +u
+        # shellcheck source=/dev/null
+        . "$nvm_dir/nvm.sh" >/dev/null 2>&1 || true
+        nvm use --silent default >/dev/null 2>&1 || true
+        set -u
+    fi
+}
+
+resolve_pi() {
+    configure_runtime_path
+    for candidate in \
+        "$HOME/.local/bin/pi" \
+        "$(command -v pi 2>/dev/null || true)" \
+        /opt/homebrew/bin/pi \
+        /usr/local/bin/pi
+    do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            pi_bin=$candidate
+            return 0
+        fi
+    done
+    return 1
+}
+
+require_node() {
+    configure_runtime_path
+    if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+        echo "pi: Node.js 22.19.0 or newer and npm are required" >&2
+        exit 69
+    fi
+    if ! node -e 'const [a,b,c] = process.versions.node.split(".").map(Number); process.exit(a > 22 || (a === 22 && (b > 19 || (b === 19 && c >= 0))) ? 0 : 1)'; then
+        echo "pi: Node.js 22.19.0 or newer is required (found $(node --version))" >&2
+        exit 69
+    fi
+}
+
+install_pi() {
+    require_node
+    mkdir -p "$HOME/.local"
+    npm install -g \
+        --ignore-scripts \
+        --min-release-age=0 \
+        --prefix "$HOME/.local" \
+        --no-fund \
+        --no-audit \
+        --loglevel=error \
+        --progress=false \
+        "$pi_package"
+    hash -r
+    pi_bin=$HOME/.local/bin/pi
+    if [ ! -x "$pi_bin" ]; then
+        echo "pi: npm did not create $pi_bin" >&2
+        exit 70
+    fi
+}
+
+ensure_pi() {
+    if ! resolve_pi; then
+        install_pi
+    fi
+}
+
+require_pi() {
+    if ! resolve_pi; then
+        echo "pi: executable not found; run $0 --install-only" >&2
+        exit 127
+    fi
+}
+
+case $action in
+    --install-only)
+        ensure_pi
+        "$pi_bin" --version
+        ;;
+    --status)
+        if resolve_pi; then
+            printf "Pi installed:  yes\n"
+            printf "Pi executable: %s\n" "$pi_bin"
+            "$pi_bin" --version
+        else
+            printf "Pi installed:  no\n"
+        fi
+        ;;
+    --update)
+        require_pi
+        "$pi_bin" update --self
+        "$pi_bin" --version
+        ;;
+esac

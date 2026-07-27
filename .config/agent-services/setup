@@ -22,9 +22,15 @@ os=$(uname -s)
 config_home=${XDG_CONFIG_HOME:-"$HOME/.config"}
 config_dir=$config_home/agent-services
 
+install_clients() {
+    "$config_home/pi/setup" --install-only
+    "$config_home/omp/setup" --install-only
+}
+
 # Codex goes last because an already-running app-server may schedule a
 # graceful restart after the current assistant turn drains.
 enable_components() {
+    install_clients
     "$config_home/agentsview/setup" --enable
     "$config_home/grok/setup" --enable
     "$config_home/codex/setup" --enable
@@ -40,6 +46,8 @@ status_components() {
     "$config_home/agentsview/setup" --status
     "$config_home/grok/setup" --status
     "$config_home/codex/setup" --status
+    "$config_home/pi/setup" --status
+    "$config_home/omp/setup" --status
 }
 
 # --- Linux (systemd) helpers ---

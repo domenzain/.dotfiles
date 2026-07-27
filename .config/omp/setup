@@ -1,0 +1,104 @@
+#!/bin/sh
+
+set -eu
+umask 077
+
+usage() {
+    echo "usage: $0 [--install-only|--status|--update]" >&2
+    exit 64
+}
+
+if [ "$#" -gt 1 ]; then
+    usage
+fi
+
+action=${1:---install-only}
+case $action in
+    --install-only|--status|--update) ;;
+    *) usage ;;
+esac
+
+case $(uname -s) in
+    Linux|Darwin) ;;
+    *)
+        echo "omp: unsupported kernel (Linux or Darwin required)" >&2
+        exit 69
+        ;;
+esac
+
+omp_bin=
+
+configure_runtime_path() {
+    PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin${PATH:+:$PATH}"
+    export PATH
+}
+
+resolve_omp() {
+    configure_runtime_path
+    for candidate in \
+        "$HOME/.local/bin/omp" \
+        "$(command -v omp 2>/dev/null || true)" \
+        /opt/homebrew/bin/omp \
+        /usr/local/bin/omp
+    do
+        if [ -n "$candidate" ] && [ -x "$candidate" ]; then
+            omp_bin=$candidate
+            return 0
+        fi
+    done
+    return 1
+}
+
+install_omp() {
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "omp: curl is required to install Oh My Pi" >&2
+        exit 69
+    fi
+
+    installer=$(mktemp "${TMPDIR:-/tmp}/omp-install.XXXXXX")
+    trap 'rm -f "$installer"' 0 1 2 15
+    curl -fsSL https://omp.sh/install -o "$installer"
+    PI_INSTALL_DIR="$HOME/.local/bin" sh "$installer" --binary
+    rm -f "$installer"
+    trap - 0 1 2 15
+
+    omp_bin=$HOME/.local/bin/omp
+    if [ ! -x "$omp_bin" ]; then
+        echo "omp: installer did not create $omp_bin" >&2
+        exit 70
+    fi
+}
+
+ensure_omp() {
+    if ! resolve_omp; then
+        install_omp
+    fi
+}
+
+require_omp() {
+    if ! resolve_omp; then
+        echo "omp: executable not found; run $0 --install-only" >&2
+        exit 127
+    fi
+}
+
+case $action in
+    --install-only)
+        ensure_omp
+        "$omp_bin" --version
+        ;;
+    --status)
+        if resolve_omp; then
+            printf "Oh My Pi installed:  yes\n"
+            printf "Oh My Pi executable: %s\n" "$omp_bin"
+            "$omp_bin" --version
+        else
+            printf "Oh My Pi installed:  no\n"
+        fi
+        ;;
+    --update)
+        require_omp
+        "$omp_bin" update
+        "$omp_bin" --version
+        ;;
+esac
