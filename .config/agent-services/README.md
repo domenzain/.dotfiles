@@ -26,3 +26,11 @@ idle, and AgentsView restarts only its observer. There are no immediate
 path-triggered restarts. `setup --disable` unloads generated service definitions
 while preserving installed CLIs and every untracked host-local configuration
 file.
+
+The optional Linux dot executor is separately enabled with
+`~/.config/codex-executor/setup --enable` after a bounded handover from an
+already authorized executor. Generic `--enable` does not enroll or start it.
+Status and disable include it when installed. Hourly updates compare its
+configured binary after the Codex update and report a pending controlled
+restart; exec-server has no documented app-server-style turn-drain API, so the
+updater never signals it automatically. See `../codex-executor/README.md`.

@@ -1,0 +1,27 @@
+#!/usr/bin/env python3
+"""Start the opt-in executor; never enroll a new computer or print registration data."""
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+import subprocess
+from runtime import command, environment, load_config, require_login, state_path
+
+try:
+    os.umask(0o077)
+    config = load_config()
+    require_login(config)
+    state = state_path()
+    state.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    binary_hash = hashlib.sha256(Path(config["codex_bin"]).read_bytes()).hexdigest()
+    snapshot = {"pid": os.getpid(), "binary_sha256": binary_hash}
+    tmp = state.with_suffix(".tmp")
+    tmp.write_text(json.dumps(snapshot))
+    tmp.replace(state)
+    os.chdir(config["working_directory"])
+    print("codex-executor: starting standalone executor using existing authorization", flush=True)
+    os.execve(config["codex_bin"], command(config), environment(config))
+except (OSError, ValueError, subprocess.SubprocessError) as error:
+    print("codex-executor: startup failed (" + type(error).__name__ + "); check private configuration and normal sign-in", file=sys.stderr)
+    sys.exit(78)

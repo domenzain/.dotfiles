@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+"""Manage a separately opted-in Linux dot executor service."""
+import argparse
+import hashlib
+import json
+import os
+from pathlib import Path
+import shlex
+import subprocess
+import sys
+from runtime import config_path, load_config, require_login, state_path
+
+UNIT = "codex-executor.service"
+SOURCE = Path(__file__).resolve().parent
+
+
+def systemctl(*args, check=True, capture=False):
+    return subprocess.run(["systemctl", "--user", *args], check=check, text=True,
+                          stdout=subprocess.PIPE if capture else None,
+                          stderr=subprocess.PIPE if capture else None)
+
+
+def main_pid():
+    result = systemctl("show", UNIT, "--property=MainPID", "--value", check=False, capture=True)
+    return int(result.stdout.strip() or "0") if result.returncode == 0 else 0
+
+
+def unmanaged_matches(config, managed):
+    matches = []
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdigit() or int(entry.name) == managed:
+            continue
+        try:
+            if entry.stat().st_uid != os.getuid():
+                continue
+            args = [os.fsdecode(v) for v in (entry / "cmdline").read_bytes().split(b"\0") if v]
+            if len(args) == 1:
+                args = shlex.split(args[0])
+            if len(args) > 1 and args[1] == "exec-server" and "--environment-id" in args and "--remote" in args:
+                if (args[args.index("--environment-id") + 1] == config["environment_id"] and
+                        args[args.index("--remote") + 1] == config["remote_url"]):
+                    matches.append(int(entry.name))
+        except (OSError, ValueError, IndexError):
+            continue
+    return matches
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    group = parser.add_mutually_exclusive_group(required=True)
+    for action in ("check", "enable", "disable", "restart", "status", "update"):
+        group.add_argument("--" + action, action="store_true")
+    options = parser.parse_args()
+    if sys.platform != "linux":
+        parser.error("Linux systemd support only; macOS lifecycle has not been validated")
+    config_root = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    link = config_root / "systemd/user" / UNIT
+    if options.disable:
+        systemctl("disable", "--now", UNIT)
+        if link.is_symlink() and link.resolve() == SOURCE / "systemd" / UNIT:
+            link.unlink()
+        systemctl("daemon-reload")
+        print("codex-executor: disabled; private configuration and sign-in preserved")
+        return
+    if options.status:
+        print("private configuration present:", config_path().is_file())
+        for prop in ("ActiveState", "SubState", "MainPID", "NRestarts", "UnitFileState"):
+            systemctl("show", UNIT, "--property=" + prop, check=False)
+        return
+    if options.update and not config_path().exists():
+        print("codex-executor: not configured; skipped")
+        return
+    config = load_config()
+    if options.update:
+        pid = main_pid()
+        if not pid:
+            print("codex-executor: stopped; next explicit start uses installed binary")
+            return
+        try:
+            snapshot = json.loads(state_path().read_text())
+        except (OSError, ValueError):
+            print("codex-executor: runtime version unknown; no automatic restart")
+            return
+        digest = hashlib.sha256(Path(config["codex_bin"]).read_bytes()).hexdigest()
+        if snapshot.get("pid") != pid or snapshot.get("binary_sha256") != digest:
+            print("codex-executor: installed binary changed; restart deferred to an approved idle maintenance window")
+        else:
+            print("codex-executor: installed and running binaries match")
+        return
+    require_login(config)
+    conflicts = unmanaged_matches(config, main_pid())
+    if conflicts:
+        raise ValueError("matching unmanaged executor exists (PID " + ", ".join(map(str, conflicts)) + "); stop it through a bounded handover before enabling")
+    if options.check:
+        print("codex-executor: configuration and sign-in valid; no duplicate executor")
+        return
+    if options.enable:
+        # Unit deliberately follows the existing fixed ~/.config convention.
+        if SOURCE != Path.home() / ".config/codex-executor" or config_root != Path.home() / ".config":
+            raise ValueError("install canonical helper under ~/.config/codex-executor before enabling")
+        link.parent.mkdir(parents=True, exist_ok=True)
+        template = SOURCE / "systemd" / UNIT
+        if link.is_symlink():
+            if link.resolve() != template:
+                raise ValueError("refusing to replace an unrelated service link")
+        elif link.exists():
+            raise ValueError("refusing to overwrite an existing service definition")
+        else:
+            link.symlink_to(template)
+        systemctl("daemon-reload")
+        systemctl("enable", "--now", UNIT)
+        print("codex-executor: enabled; verify fresh dot admission separately")
+    elif options.restart:
+        print("codex-executor: explicit restart interrupts local tasks; no documented turn-drain API", flush=True)
+        systemctl("restart", UNIT)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
+        # Config-validation text contains field names and PIDs, never field values.
+        message = str(error) if isinstance(error, ValueError) else type(error).__name__
+        print("codex-executor: " + message, file=sys.stderr)
+        sys.exit(1)

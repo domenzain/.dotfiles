@@ -47,6 +47,11 @@ run_update AgentsView "$config_home/agentsview/setup"
 run_update Grok "$config_home/grok/setup"
 run_update Codex "$config_home/codex/setup"
 
+# Only inspect an opted-in executor; never interrupt its active tasks.
+if [[ "$(uname -s)" == Linux && -x "$config_home/codex-executor/setup" ]]; then
+    run_update "Codex dot executor" "$config_home/codex-executor/setup"
+fi
+
 if (( failures > 0 )); then
     echo "agent-services: $failures update check(s) failed" >&2
     exit 1

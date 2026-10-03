@@ -37,12 +37,18 @@ enable_components() {
 }
 
 disable_components() {
+    if [ "$(uname -s)" = Linux ] && [ -L "$config_home/systemd/user/codex-executor.service" ]; then
+        "$config_home/codex-executor/setup" --disable
+    fi
     "$config_home/agentsview/setup" --disable
     "$config_home/grok/setup" --disable
     "$config_home/codex/setup" --disable
 }
 
 status_components() {
+    if [ "$(uname -s)" = Linux ] && [ -x "$config_home/codex-executor/setup" ]; then
+        "$config_home/codex-executor/setup" --status
+    fi
     "$config_home/agentsview/setup" --status
     "$config_home/grok/setup" --status
     "$config_home/codex/setup" --status

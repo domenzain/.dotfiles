@@ -1,0 +1,23 @@
+[Unit]
+Description=Codex dot standalone executor (separate opt-in)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60s
+StartLimitBurst=5
+
+[Service]
+Type=simple
+UMask=0077
+WorkingDirectory=%h
+ExecStart=%h/.config/codex-executor/service
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+Restart=always
+RestartSec=5s
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=30s
+
+[Install]
+WantedBy=default.target

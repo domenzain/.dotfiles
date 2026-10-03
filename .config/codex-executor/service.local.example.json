@@ -1,0 +1,7 @@
+{
+  "codex_bin": "/absolute/path/to/installed/codex",
+  "codex_home": "/absolute/path/to/existing/signed-in/profile",
+  "remote_url": "https://registry.example.invalid/api",
+  "environment_id": "EXISTING_AUTHORIZED_ENVIRONMENT_ID",
+  "working_directory": "/absolute/path/to/workspace"
+}
